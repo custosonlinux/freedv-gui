@@ -127,6 +127,11 @@ EasySetupDialog::EasySetupDialog(wxWindow* parent, wxWindowID id, const wxString
     m_ckUseSerialPTT->SetValue(false);
     catTypeSizer->Add(m_ckUseSerialPTT, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
 
+    /* Use TCI for PTT radio button. */
+    m_ckUseTCIPTT = new wxRadioButton(setupCatControlBox, wxID_ANY, _("TCI"), wxDefaultPosition, wxSize(-1, -1), 0);
+    m_ckUseTCIPTT->SetValue(false);
+    catTypeSizer->Add(m_ckUseTCIPTT, 0, wxALL | wxALIGN_CENTER_VERTICAL, 2);
+
     /* Hamlib box */
     m_hamlibBox = new wxStaticBox(setupCatControlBox, wxID_ANY, _("Hamlib CAT Control"));
     m_hamlibBox->Hide();
@@ -227,6 +232,33 @@ EasySetupDialog::EasySetupDialog(wxWindow* parent, wxWindowID id, const wxString
     serialBoxSizer->Add(gridSizerSerial, 0, wxALL | wxEXPAND, 2);
     setupCatControlBoxSizer->Add(serialBoxSizer, 0, wxALL | wxEXPAND, 2);
 
+    /* TCI box */
+    m_tciBox = new wxStaticBox(setupCatControlBox, wxID_ANY, _("TCI CAT Control"));
+    m_tciBox->Hide();
+    wxStaticBoxSizer* tciBoxSizer = new wxStaticBoxSizer(m_tciBox, wxVERTICAL);
+    wxGridSizer* gridSizerTci = new wxGridSizer(2, 2, 0, 0);
+
+    /* TCI hostname */
+    wxStaticText* tciHostnameLabel = new wxStaticText(m_tciBox, wxID_ANY, _("Hostname:"), wxDefaultPosition, wxDefaultSize, 0);
+    tciHostnameLabel->Wrap(-1);
+    gridSizerTci->Add(tciHostnameLabel, 0, wxALL | wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL, 2);
+
+    m_tcTciHostname = new wxTextCtrl(m_tciBox, wxID_ANY, wxT("localhost"), wxDefaultPosition, wxDefaultSize, 0);
+    m_tcTciHostname->SetMinSize(wxSize(140, -1));
+    gridSizerTci->Add(m_tcTciHostname, 0, wxALL | wxEXPAND, 2);
+
+    /* TCI port */
+    wxStaticText* tciPortLabel = new wxStaticText(m_tciBox, wxID_ANY, _("Port:"), wxDefaultPosition, wxDefaultSize, 0);
+    tciPortLabel->Wrap(-1);
+    gridSizerTci->Add(tciPortLabel, 0, wxALL | wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL, 2);
+
+    m_tcTciPort = new wxTextCtrl(m_tciBox, wxID_ANY, wxT("40001"), wxDefaultPosition, wxDefaultSize, 0);
+    m_tcTciPort->SetMinSize(wxSize(80, -1));
+    gridSizerTci->Add(m_tcTciPort, 0, wxALL, 2);
+
+    tciBoxSizer->Add(gridSizerTci);
+    setupCatControlBoxSizer->Add(tciBoxSizer, 0, wxALL | wxEXPAND, 2);
+
     wxBoxSizer* pttButtonSizer = new wxBoxSizer(wxHORIZONTAL);
     
     /* Advanced/test buttons */
@@ -298,6 +330,7 @@ EasySetupDialog::EasySetupDialog(wxWindow* parent, wxWindowID id, const wxString
     m_ckUseHamlibPTT->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
     m_ckNoPTT->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
     m_ckUseSerialPTT->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
+    m_ckUseTCIPTT->Connect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
     
     m_cbRigName->Connect(wxEVT_COMBOBOX, wxCommandEventHandler(EasySetupDialog::HamlibRigNameChanged), NULL, this);
     
@@ -322,6 +355,7 @@ EasySetupDialog::~EasySetupDialog()
     m_ckUseHamlibPTT->Disconnect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
     m_ckNoPTT->Disconnect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
     m_ckUseSerialPTT->Disconnect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
+    m_ckUseTCIPTT->Disconnect(wxEVT_RADIOBUTTON, wxCommandEventHandler(EasySetupDialog::PTTUseHamLibClicked), NULL, this);
 
     m_cbRigName->Disconnect(wxEVT_COMBOBOX, wxCommandEventHandler(EasySetupDialog::HamlibRigNameChanged), NULL, this);
     
@@ -517,11 +551,13 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
     {
         m_ckUseHamlibPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT);
         m_ckUseSerialPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT);
+        m_ckUseTCIPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCI);
 
         if (wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT)
         {
             m_hamlibBox->Show();
             m_serialBox->Hide();
+            m_tciBox->Hide();
 
             m_cbRigName->SetSelection(wxGetApp().m_intHamlibRig);
             resetIcomCIVStatus_();
@@ -553,6 +589,7 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
         {
             m_hamlibBox->Hide();
             m_serialBox->Show();
+            m_tciBox->Hide();
 
             auto str = wxGetApp().appConfiguration.rigControlConfiguration.serialPTTPort;
             m_cbCtlDevicePath->SetValue(str);
@@ -561,10 +598,20 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
             m_rbUseDTR->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.serialPTTUseDTR);
             m_ckDTRPos->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.serialPTTPolarityDTR);
         }
+        else if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI)
+        {
+            m_hamlibBox->Hide();
+            m_serialBox->Hide();
+            m_tciBox->Show();
+
+            m_tcTciHostname->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.tciHostname);
+            m_tcTciPort->SetValue(wxString::Format(wxT("%u"), wxGetApp().appConfiguration.rigControlConfiguration.tciPort.get()));
+        }
         else
         {
             m_hamlibBox->Hide();
             m_serialBox->Hide();
+            m_tciBox->Hide();
         }
 
         Layout();
@@ -579,6 +626,8 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
         wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT = m_ckUseHamlibPTT->GetValue();
         
         wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT = m_ckUseSerialPTT->GetValue();
+        
+        wxGetApp().appConfiguration.rigControlConfiguration.useTCI = m_ckUseTCIPTT->GetValue();
 
         if (m_ckUseHamlibPTT->GetValue())
         {
@@ -611,6 +660,14 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
             wxGetApp().appConfiguration.rigControlConfiguration.serialPTTPolarityRTS                 = m_ckRTSPos->IsChecked();
             wxGetApp().appConfiguration.rigControlConfiguration.serialPTTUseDTR                 = m_rbUseDTR->GetValue();
             wxGetApp().appConfiguration.rigControlConfiguration.serialPTTPolarityDTR                 = m_ckDTRPos->IsChecked();
+        }
+        else if (m_ckUseTCIPTT->GetValue())
+        {
+            wxGetApp().appConfiguration.rigControlConfiguration.tciHostname = m_tcTciHostname->GetValue();
+            
+            long port;
+            m_tcTciPort->GetValue().ToLong(&port);
+            wxGetApp().appConfiguration.rigControlConfiguration.tciPort = (unsigned int)port;
         }
         
         wxGetApp().appConfiguration.save(pConfig);
@@ -1010,6 +1067,15 @@ void EasySetupDialog::PTTUseHamLibClicked(wxCommandEvent&)
     else
     {
         m_serialBox->Hide();
+    }
+
+    if (m_ckUseTCIPTT->GetValue())
+    {
+        m_tciBox->Show();
+    }
+    else
+    {
+        m_tciBox->Hide();
     }
 
     Layout();
@@ -1446,6 +1512,7 @@ bool EasySetupDialog::canTestRadioSettings_()
     bool noPttSelected = m_ckNoPTT->GetValue();
     bool hamlibSelected = m_ckUseHamlibPTT->GetValue();
     bool serialSelected = m_ckUseSerialPTT->GetValue();
+    bool tciSelected = m_ckUseTCIPTT->GetValue();
     
     bool hamlibSerialPortEntered = m_cbSerialPort->GetValue().Length() > 0;
     bool icomRadioSelected = HamlibRigController::RigIndexToName(m_cbRigName->GetSelection()).find("Icom") != std::string::npos;
@@ -1457,9 +1524,13 @@ bool EasySetupDialog::canTestRadioSettings_()
     bool useRtsSelected = m_rbUseRTS->GetValue();
     bool serialPttValid = serialPttPortEntered && (useDtrSelected || useRtsSelected);
     
+    bool tciHostnameEntered = m_tcTciHostname->GetValue().Length() > 0;
+    bool tciPortEntered = m_tcTciPort->GetValue().Length() > 0;
+    bool tciValid = tciHostnameEntered && tciPortEntered;
+    
     bool radioCommValid = 
         noPttSelected || (hamlibSelected && hamlibValid) || 
-        (serialSelected && serialPttValid);
+        (serialSelected && serialPttValid) || (tciSelected && tciValid);
     
     return soundDevicesConfigured && radioCommValid;
 }

@@ -108,25 +108,46 @@ bool TciRigController::isConnected()
 
 void TciRigController::ptt(bool state)
 {
+    fprintf(stderr, "\n=== TCI PTT REQUEST ===\n");
+    fprintf(stderr, "TCI PTT: Requested state = %s\n", state ? "ON (TRANSMIT)" : "OFF (RECEIVE)");
+    fprintf(stderr, "TCI PTT: Connected = %s\n", connected_ ? "YES" : "NO");
+    fprintf(stderr, "TCI PTT: TRX number = %d\n", trx_);
+    
     if (!connected_)
     {
+        fprintf(stderr, "TCI PTT: ERROR - Not connected, cannot set PTT\n");
+        fprintf(stderr, "======================\n\n");
         return;
     }
     
+    fprintf(stderr, "TCI PTT: Enqueueing PTT command...\n");
+    
     enqueue_([this, state]() {
+        fprintf(stderr, "TCI PTT: [QUEUE] Processing PTT command\n");
+        fprintf(stderr, "TCI PTT: [QUEUE] Previous PTT state = %s\n", pttState_ ? "ON" : "OFF");
+        
         pttState_ = state;
         
-        // TRX:trx_num,state,audio_source;
-        // audio_source: "tci" routes audio from TCI streams
+        fprintf(stderr, "TCI PTT: [QUEUE] New PTT state = %s\n", pttState_ ? "ON" : "OFF");
+        
+        // TRX:trx_num,state;
         std::vector<std::string> args;
         args.push_back(std::to_string(trx_));
         args.push_back(state ? "true" : "false");
-        args.push_back("tci");  // Use TCI audio source
+        
+        fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s])\n", 
+                trx_, state ? "true" : "false");
         
         sendCommand_("trx", args);
         
+        fprintf(stderr, "TCI PTT: [QUEUE] sendCommand_() returned\n");
+        fprintf(stderr, "TCI PTT: [QUEUE] Notifying listeners...\n");
+        
         // Notify listeners
         onPttChange(this, state);
+        
+        fprintf(stderr, "TCI PTT: [QUEUE] PTT command complete\n");
+        fprintf(stderr, "======================\n\n");
     });
 }
 
@@ -362,27 +383,11 @@ void TciRigController::sendCommand_(const std::string& cmdName, const std::vecto
 tci::Modulation TciRigController::freeDvModeToTci_(Mode mode)
 {
     // Map FreeDV modes to TCI modes
-    // For digital modes, use DIGL/DIGU for proper audio passthrough
-    switch (mode)
-    {
-        case USB:
-        case DIGU:
-            return tci::DIGU;
-            
-        case LSB:
-        case DIGL:
-            return tci::DIGL;
-            
-        case FM:
-        case DIGFM:
-            return tci::NFM;
-            
-        case AM:
-            return tci::AM;
-            
-        default:
-            return tci::DIGU;  // Default to DIGU
-    }
+    // FreeDV ALWAYS uses USB for proper audio passthrough
+    fprintf(stderr, "TCI MODE: Mapping FreeDV mode %d to USB (forced)\n", static_cast<int>(mode));
+    
+    // Always return USB regardless of input mode
+    return tci::USB;
 }
 
 IRigFrequencyController::Mode TciRigController::tciModeToFreeDv_(tci::Modulation mod)

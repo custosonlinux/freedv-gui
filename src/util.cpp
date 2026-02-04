@@ -118,9 +118,14 @@ bool MainApp::CanAccessSerialPort(std::string const& portName)
 
 bool MainFrame::isReceiveOnly()
 {
+    // If using TCI for PTT, we're not receive-only regardless of sound card configuration
+    // because TCI handles both RX and TX audio independently
+    bool usingTciPtt = wxGetApp().appConfiguration.rigControlConfiguration.useTCI;
+    
     return 
-        wxGetApp().appConfiguration.reportingConfiguration.freedvReporterForceReceiveOnly || 
-        g_nSoundCards <= 1;
+        !usingTciPtt &&
+        (wxGetApp().appConfiguration.reportingConfiguration.freedvReporterForceReceiveOnly || 
+         g_nSoundCards <= 1);
 }
 
 //----------------------------------------------------------------

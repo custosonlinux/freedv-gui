@@ -34,6 +34,7 @@
 
 #include "rig_control/HamlibRigController.h"
 #include "rig_control/SerialPortOutRigController.h"
+#include "rig_control/TciRigController.h"
 
 #if defined(WIN32)
 #include "rig_control/omnirig/OmniRigController.h"
@@ -913,6 +914,71 @@ void ComPortsDlg::OnTest(wxCommandEvent&) {
             isTesting_ = false;
             updateControlState();
         }
+    }
+    else if (m_ckUseTCIPTT->IsChecked())
+    {
+        /* TCI PTT */
+        wxString hostname = m_tcTciHostname->GetValue();
+        wxString portStr = m_tcTciPort->GetValue();
+        long port;
+        portStr.ToLong(&port);
+        
+        log_debug("Testing TCI PTT: %s:%ld\n", (const char*)hostname.c_str(), port);
+        fprintf(stderr, "Testing TCI PTT: %s:%ld\n", (const char*)hostname.c_str(), port);
+        
+        std::shared_ptr<TciRigController> tci = std::make_shared<TciRigController>(
+            std::string(hostname.mb_str(wxConvUTF8)), (int)port, 0, 0);
+        
+        tci->onRigError += [=](IRigController*, std::string const& error) {
+            CallAfter([=]() {
+                wxMessageBox(wxString::Format("Couldn't connect to TCI server (%s). Make sure the server is running at %s:%ld", 
+                    error, (const char*)hostname.c_str(), port), 
+                    wxT("Error"), wxOK | wxICON_ERROR, this);
+                cv->notify_one();
+            });
+        };
+        
+        tci->onRigConnected += [=](IRigController*) {
+            log_debug("TCI connected, setting PTT ON\n");
+            fprintf(stderr, "TCI Test: Connected, setting PTT ON\n");
+            tci->ptt(true);
+        };
+        
+        tci->onPttChange += [=](IRigController*, bool state) {
+            log_debug("TCI PTT state changed to %s\n", state ? "ON" : "OFF");
+            fprintf(stderr, "TCI Test: PTT state changed to %s\n", state ? "ON" : "OFF");
+            
+            if (state)
+            {
+                // Keep PTT on for 1 second
+                std::this_thread::sleep_for(1s);
+                log_debug("TCI setting PTT OFF\n");
+                fprintf(stderr, "TCI Test: Setting PTT OFF\n");
+                tci->ptt(false);
+            }
+            else
+            {
+                // PTT is now off, signal completion
+                cv->notify_one();
+            }
+        };
+        
+        std::thread tciThread([=]() {
+            tci->connect();
+            
+            std::unique_lock<std::mutex> lk(*mtx);
+            cv->wait(lk);
+            
+            log_debug("TCI test complete, disconnecting\n");
+            fprintf(stderr, "TCI Test: Complete, disconnecting\n");
+            tci->disconnect();
+            
+            CallAfter([this]() {
+                isTesting_ = false;
+                updateControlState();
+            });
+        });
+        tciThread.detach();
     }
     
 #if defined(WIN32)
