@@ -33,6 +33,10 @@ RigControlConfiguration::RigControlConfiguration()
     , hamlibSerialPort("/Hamlib/SerialPort", "")
     , hamlibPttSerialPort("/Hamlib/PttSerialPort", "")
         
+    , useTCI("/TCI/UseTCI", false)
+    , tciHostname("/TCI/Hostname", "localhost")
+    , tciPort("/TCI/Port", 50001)
+        
     , useSerialPTT("/Rig/UseSerialPTT", false)
     , serialPTTPort("/Rig/Port", "")
     , serialPTTUseRTS("/Rig/UseRTS", true)
@@ -74,6 +78,10 @@ void RigControlConfiguration::load(wxConfigBase* config)
     hamlibPttSerialPort.setDefaultVal(tmp);
     load_(config, hamlibPttSerialPort);
     
+    load_(config, useTCI);
+    load_(config, tciHostname);
+    load_(config, tciPort);
+    
     load_(config, useSerialPTT);
     load_(config, serialPTTPort);
     load_(config, serialPTTUseRTS);
@@ -107,6 +115,10 @@ void RigControlConfiguration::save(wxConfigBase* config)
     save_(config, hamlibSerialRate);
     save_(config, hamlibSerialPort);
     save_(config, hamlibPttSerialPort);
+    
+    save_(config, useTCI);
+    save_(config, tciHostname);
+    save_(config, tciPort);
     
     save_(config, useSerialPTT);
     save_(config, serialPTTPort);

@@ -622,6 +622,54 @@ bool MainFrame::OpenHamlibRig() {
     }
 }
 
+//-------------------------------------------------------------------------
+// OpenTciRig()
+//-------------------------------------------------------------------------
+bool MainFrame::OpenTciRig() {
+    fprintf(stderr, "OpenTciRig called, useTCI=%d\n", (int)wxGetApp().appConfiguration.rigControlConfiguration.useTCI.get());
+    
+    if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI != true)
+        return false;
+
+    wxString hostname = wxGetApp().appConfiguration.rigControlConfiguration.tciHostname;
+    unsigned int port = wxGetApp().appConfiguration.rigControlConfiguration.tciPort;
+    
+    fprintf(stderr, "TCI config: hostname='%s' port=%u (default should be 50001)\n", (const char*)hostname.ToUTF8(), port);
+    fprintf(stderr, "TCI connecting to %s:%u\n", (const char*)hostname.ToUTF8(), port);
+    
+    auto tmp = std::make_shared<TciRigController>(
+        std::string(hostname.ToUTF8()), 
+        port);
+
+    // TCI also controls PTT and frequency.
+    firstFreqUpdateOnConnect_ = false;
+    wxGetApp().rigFrequencyController = tmp;
+    wxGetApp().rigPttController = tmp;
+    
+    wxGetApp().rigFrequencyController->onRigError += [this](IRigController*, std::string const& err)
+    {
+        std::string fullErr = "Couldn't connect to Radio with TCI: " + err;
+        CallAfter([&, fullErr]() {
+            wxMessageBox(fullErr, wxT("Error"), wxOK | wxICON_ERROR, this);
+        });
+    };
+
+    wxGetApp().rigFrequencyController->onRigConnected += [&](IRigController* ptr) {
+        onRadioConnected_(ptr);
+    };
+
+    wxGetApp().rigFrequencyController->onRigDisconnected += [&](IRigController* ptr) {
+        onRadioDisconnected_(ptr);
+    };
+
+    wxGetApp().rigFrequencyController->onFreqModeChange += [&](IRigFrequencyController* ptr, uint64_t freq, IRigFrequencyController::Mode mode) {
+        onFrequencyModeChange_(ptr, freq, mode);
+    };
+    
+    wxGetApp().rigFrequencyController->connect();
+    return true;
+}
+
 #if defined(WIN32)
 // TBD -- a lot of this can be combined with the Hamlib logic above.
 void MainFrame::OpenOmniRig() 

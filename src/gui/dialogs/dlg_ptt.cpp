@@ -153,6 +153,35 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
     mainSizer->Add(staticBoxSizer18, 0, wxEXPAND, 5);
 
     //----------------------------------------------------------------------
+    // TCI for CAT PTT
+    //----------------------------------------------------------------------
+
+    wxStaticBox* tciBox = new wxStaticBox(panel, wxID_ANY, _("TCI Protocol Settings"));
+    wxStaticBoxSizer* staticBoxSizer19 = new wxStaticBoxSizer(tciBox, wxHORIZONTAL);
+    wxGridSizer* gridSizerTci = new wxGridSizer(3, 2, 0, 0);
+    staticBoxSizer19->Add(gridSizerTci, 1, wxEXPAND|wxALIGN_LEFT, 5);
+
+    /* Use TCI for PTT checkbox */
+    m_ckUseTCIPTT = new wxCheckBox(tciBox, wxID_ANY, _("Enable CAT control via TCI"), wxDefaultPosition, wxSize(-1, -1), 0);
+    m_ckUseTCIPTT->SetValue(false);
+    gridSizerTci->Add(m_ckUseTCIPTT, 0, wxALIGN_CENTER_VERTICAL, 0);
+    gridSizerTci->Add(new wxStaticText(tciBox, -1, wxT("")), 0, wxEXPAND);
+
+    /* TCI Hostname */
+    gridSizerTci->Add(new wxStaticText(tciBox, wxID_ANY, _("Hostname:"), wxDefaultPosition, wxDefaultSize, 0), 
+                      0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT, 20);
+    m_tcTciHostname = new wxTextCtrl(tciBox, wxID_ANY, wxT("localhost"), wxDefaultPosition, wxSize(250, -1));
+    gridSizerTci->Add(m_tcTciHostname, 0, wxEXPAND, 0);
+
+    /* TCI Port */
+    gridSizerTci->Add(new wxStaticText(tciBox, wxID_ANY, _("Port:"), wxDefaultPosition, wxDefaultSize, 0), 
+                      0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT, 20);
+    m_tcTciPort = new wxTextCtrl(tciBox, wxID_ANY, wxT("50001"), wxDefaultPosition, wxSize(250, -1));
+    gridSizerTci->Add(m_tcTciPort, 0, wxEXPAND, 0);
+    
+    mainSizer->Add(staticBoxSizer19, 0, wxEXPAND, 5);
+
+    //----------------------------------------------------------------------
     // Serial port PTT
     //----------------------------------------------------------------------
 
@@ -296,6 +325,7 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
     // Connect events
     this->Connect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
+    m_ckUseTCIPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
     m_ckUseSerialPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     
 #if defined(WIN32)
@@ -321,6 +351,7 @@ ComPortsDlg::~ComPortsDlg()
     // Disconnect Events
     this->Disconnect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
+    m_ckUseTCIPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
     m_ckUseSerialPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     m_ckUsePTTInput->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialInputClicked), NULL, this);
     m_cbRigName->Disconnect(wxEVT_COMBOBOX, wxCommandEventHandler(ComPortsDlg::HamlibRigNameChanged), NULL, this);
@@ -593,6 +624,12 @@ void ComPortsDlg::ExchangeData(int inout)
         
         m_cbPttMethod->SetSelection((int)wxGetApp().appConfiguration.rigControlConfiguration.hamlibPTTType);
         
+        /* TCI */
+
+        m_ckUseTCIPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCI);
+        m_tcTciHostname->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.tciHostname);
+        m_tcTciPort->SetValue(wxString::Format(wxT("%u"), wxGetApp().appConfiguration.rigControlConfiguration.tciPort.get()));
+        
         /* Serial PTT */
 
         m_ckUseSerialPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT);
@@ -651,6 +688,14 @@ void ComPortsDlg::ExchangeData(int inout)
 
         wxGetApp().appConfiguration.rigControlConfiguration.hamlibPTTType = m_cbPttMethod->GetSelection();
         
+        /* TCI settings */
+
+        wxGetApp().appConfiguration.rigControlConfiguration.useTCI = m_ckUseTCIPTT->GetValue();
+        wxGetApp().appConfiguration.rigControlConfiguration.tciHostname = m_tcTciHostname->GetValue();
+        long tciPort = 50001;
+        m_tcTciPort->GetValue().ToLong(&tciPort);
+        wxGetApp().appConfiguration.rigControlConfiguration.tciPort = tciPort;
+        
         /* Serial settings */
 
         wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT           = m_ckUseSerialPTT->IsChecked();
@@ -679,6 +724,22 @@ void ComPortsDlg::ExchangeData(int inout)
 //-------------------------------------------------------------------------
 void ComPortsDlg::PTTUseHamLibClicked(wxCommandEvent&)
 {
+    m_ckUseTCIPTT->SetValue(false);
+    m_ckUseSerialPTT->SetValue(false);
+    
+#if defined(WIN32)
+    m_ckUseOmniRig->SetValue(false);
+#endif // defined(WIN32)
+    
+    updateControlState();
+}
+
+//-------------------------------------------------------------------------
+// PTTUseTciClicked()
+//-------------------------------------------------------------------------
+void ComPortsDlg::PTTUseTciClicked(wxCommandEvent&)
+{
+    m_ckUseHamlibPTT->SetValue(false);
     m_ckUseSerialPTT->SetValue(false);
     
 #if defined(WIN32)
@@ -921,7 +982,8 @@ void ComPortsDlg::PTTUseOmniRigClicked(wxCommandEvent&)
 //-------------------------------------------------------------------------
 void ComPortsDlg::PTTUseSerialClicked(wxCommandEvent&)
 {
-    m_ckUseHamlibPTT->SetValue(false);    
+    m_ckUseHamlibPTT->SetValue(false);
+    m_ckUseTCIPTT->SetValue(false);
     updateControlState();
 }
 
@@ -1007,6 +1069,7 @@ void ComPortsDlg::updateControlState()
 {
     m_ckLeftChannelVoxTone->Enable(!isTesting_);
     m_ckUseHamlibPTT->Enable(!isTesting_);
+    m_ckUseTCIPTT->Enable(!isTesting_);
     m_ckUseSerialPTT->Enable(!isTesting_);
     m_ckUsePTTInput->Enable(!isTesting_);
 #if defined(WIN32)
@@ -1019,6 +1082,9 @@ void ComPortsDlg::updateControlState()
     m_tcIcomCIVHex->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
     m_cbPttMethod->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
     m_cbPttSerialPort->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
+
+    m_tcTciHostname->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
+    m_tcTciPort->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
 
     m_cbCtlDevicePath->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());
     m_rbUseDTR->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());
@@ -1033,7 +1099,7 @@ void ComPortsDlg::updateControlState()
     m_cbOmniRigRigId->Enable(!isTesting_ && m_ckUseOmniRig->GetValue());
 #endif // defined(WIN32)
     
-    m_buttonTest->Enable(!isTesting_ && (m_ckUseHamlibPTT->GetValue() || m_ckUseSerialPTT->GetValue()
+    m_buttonTest->Enable(!isTesting_ && (m_ckUseHamlibPTT->GetValue() || m_ckUseTCIPTT->GetValue() || m_ckUseSerialPTT->GetValue()
 #if defined(WIN32)
          || m_ckUseOmniRig->GetValue()
 #endif // defined(WIN32)

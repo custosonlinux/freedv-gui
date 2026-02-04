@@ -80,6 +80,7 @@
 #include "sox_biquad.h"
 #include "comp_prim.h"
 #include "rig_control/HamlibRigController.h"
+#include "rig_control/TciRigController.h"
 #include "rig_control/SerialPortOutRigController.h"
 #include "rig_control/SerialPortInRigController.h"
 #include "reporting/IReporter.h"
@@ -293,6 +294,7 @@ class MainFrame : public TopFrame
         bool                    m_RxRunning;
         
         bool                    OpenHamlibRig();
+        bool                    OpenTciRig();
 #if defined(WIN32)
         void                    OpenOmniRig();
 #endif // defined(WIN32)

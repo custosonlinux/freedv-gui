@@ -39,6 +39,8 @@ TciRigController::TciRigController(std::string hostname, int port, int trx, int 
     , minFrequency_(0)
     , maxFrequency_(60000000)
 {
+    fprintf(stderr, "TciRigController constructor: hostname='%s' port=%d\n", hostname_.c_str(), port_);
+    
     wsClient_ = std::make_shared<tci::TciWebSocketClient>();
     
     // Set up callbacks

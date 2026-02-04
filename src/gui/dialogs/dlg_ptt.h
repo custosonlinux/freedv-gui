@@ -62,6 +62,12 @@ class ComPortsDlg : public wxDialog
         wxTextCtrl *m_tcIcomCIVHex;
         wxComboBox *m_cbPttMethod;
 
+        /* TCI settings */
+
+        wxCheckBox *m_ckUseTCIPTT;
+        wxTextCtrl *m_tcTciHostname;
+        wxTextCtrl *m_tcTciPort;
+
         /* Serial Settings */
 
         wxCheckBox    *m_ckUseSerialPTT;
@@ -96,6 +102,7 @@ protected:
         void populateBaudRateList(int min = 0, int max = 0);
 
         void PTTUseHamLibClicked(wxCommandEvent& event);
+        void PTTUseTciClicked(wxCommandEvent& event);
         void PTTUseSerialClicked(wxCommandEvent& event);
         
 #if defined(WIN32)
