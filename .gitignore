@@ -13,3 +13,11 @@ a.out
 *.marks
 *.AppDir
 *.AppImage
+
+# Build directory
+/build/
+
+# TCI test files (outside of src/)
+test_tci
+simple_tci_test
+websocket_tci_test

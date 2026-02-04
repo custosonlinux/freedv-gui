@@ -33,6 +33,7 @@ add_library(fdv_audio STATIC
     AudioEngineFactory.cpp
     IAudioDevice.cpp
     IAudioEngine.cpp
+    TciAudioDevice.cpp
     ${AUDIO_ENGINE_LIBRARY_SPECIFIC_FILES}
 )
 

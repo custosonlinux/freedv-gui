@@ -3,6 +3,9 @@ add_library(fdv_rig_control STATIC
     SerialPortRigController.cpp
     SerialPortInRigController.cpp
     SerialPortOutRigController.cpp
+    TciProtocol.cpp
+    TciWebSocketClient.cpp
+    TciRigController.cpp
 )
 
 target_include_directories(fdv_rig_control PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_BINARY_DIR}/..)
