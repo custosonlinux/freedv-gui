@@ -416,6 +416,12 @@ void TciRigController::onConnected_()
     // Request initial settings
     sendCommand_("audio_sample_rate", {std::to_string(48000)});
     
+    // Set RX filter bandwidth wide enough for FreeDV/RADE
+    // RADE uses ~600-2350 Hz, so 100-2700 Hz gives good margin
+    sendCommand_("rx_filter_band", {std::to_string(trx_), "100", "2700"});
+    fprintf(stderr, "TCI: Set RX filter bandwidth to 100-2700 Hz for TRX %d\n", trx_);
+    fflush(stderr);
+    
     // Note: audio_start command is sent by TciAudioDevice::start() when the audio
     // device is ready to receive data. Sending it here would cause audio packets
     // to arrive before the audio device is initialized, causing crashes.

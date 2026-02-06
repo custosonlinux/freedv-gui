@@ -103,6 +103,20 @@ short* FreeDVReceiveStep::execute(short* inputSamples, int numInputSamples, int*
     auto maxSpeechSamples = freedv_get_n_max_speech_samples(dv_);
     *numOutputSamples = 0;
 
+    // Debug: log input to FreeDV modem
+    static int fdvDebugCount = 0;
+    if (++fdvDebugCount <= 10 || fdvDebugCount % 200 == 0)
+    {
+        fprintf(stderr, "FreeDV RX: input %d samples at %d Hz, first: %d %d %d %d, nin=%d\n",
+                numInputSamples, getInputSampleRate(),
+                numInputSamples > 0 ? inputSamples[0] : 0,
+                numInputSamples > 1 ? inputSamples[1] : 0,
+                numInputSamples > 2 ? inputSamples[2] : 0,
+                numInputSamples > 3 ? inputSamples[3] : 0,
+                freedv_nin(dv_));
+        fflush(stderr);
+    }
+
     short* inputPtr = inputSamples;
     while (numInputSamples > 0 && inputPtr != nullptr)
     {
@@ -135,6 +149,18 @@ short* FreeDVReceiveStep::execute(short* inputSamples, int numInputSamples, int*
             FREEDV_END_VERIFIED_SAFE
 
             *numOutputSamples += nout;
+            
+            // Debug: log sync state and output
+            static int fdvSyncDebug = 0;
+            if (++fdvSyncDebug <= 20 || fdvSyncDebug % 200 == 0)
+            {
+                int sync = 0;
+                float snr = 0.0f;
+                freedv_get_modem_stats(dv_, &sync, &snr);
+                fprintf(stderr, "FreeDV RX: sync=%d, snr=%.1f, nout=%d, total_out=%d\n",
+                        sync, snr, nout, *numOutputSamples);
+                fflush(stderr);
+            }
             
             nin = freedv_nin(dv_);
         }

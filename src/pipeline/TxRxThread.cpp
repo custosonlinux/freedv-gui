@@ -588,7 +588,13 @@ void* TxRxThread::Entry() noexcept
         }
         auto totalFifoCapacity = outFifo->capacity();
         auto fifoUsed = outFifo->numUsed();
-        helper->stopRealTimeWork(fifoUsed < totalFifoCapacity / 2);
+        
+        // Use fast mode if output FIFO is less than half full, OR if input FIFO
+        // is backing up (more than 1 second of audio waiting). This ensures we
+        // process aggressively when falling behind on input.
+        bool outputNeedsData = fifoUsed < totalFifoCapacity / 2;
+        bool inputBackingUp = !m_tx && cbData->infifo1 && cbData->infifo1->numUsed() > inputSampleRate_;
+        helper->stopRealTimeWork(outputNeedsData || inputBackingUp);
     }
 
 #if defined(ENABLE_PROCESSING_STATS)
@@ -858,12 +864,33 @@ void TxRxThread::rxProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
         clearFifos_();
     }
 
-    int nsam_one_speech_frame = (freedvInterface.getRxNumSpeechSamples() * outputSampleRate_) / freedvInterface.getRxSpeechSampleRate();
+    // In digital mode, the modem expands samples (8kHz speech -> 48kHz output)
+    // In analog mode, input = output sample count (1:1 passthrough)
+    int nsam_one_speech_frame = g_analog ? nsam : 
+        (freedvInterface.getRxNumSpeechSamples() * outputSampleRate_) / freedvInterface.getRxSpeechSampleRate();
     auto outFifo = (g_nSoundCards == 1) ? cbData->outfifo1 : cbData->outfifo2;
+
+    // Debug: log processing state (only every 500th call to reduce spam)
+    static int rxDebugCount = 0;
+    if (++rxDebugCount <= 5 || rxDebugCount % 500 == 0)
+    {
+        fprintf(stderr, "TxRxThread RX: processInputFifo=%d, infifo1 used=%d, need=%d, outFifo free=%d, need=%d (analog=%d)\n",
+                processInputFifo, cbData->infifo1->numUsed(), nsam, outFifo->numFree(), nsam_one_speech_frame, g_analog);
+        fflush(stderr);
+    }
 
     // while we have enough input samples available and enough space in the output FIFO ... 
     while (!helper->mustStopWork() && processInputFifo && outFifo->numFree() >= nsam_one_speech_frame && cbData->infifo1->read(inputSamples_.get(), nsam) == 0) {
         
+        // Debug: track actual RX processing (only every 500th to reduce spam)
+        static int rxProcessCount = 0;
+        if (++rxProcessCount <= 10 || rxProcessCount % 500 == 0)
+        {
+            fprintf(stderr, "TxRxThread RX: Processing %d samples, first few: %d %d %d %d\n",
+                    nsam, inputSamples_[0], inputSamples_[1], inputSamples_[2], inputSamples_[3]);
+            fflush(stderr);
+        }
+
 #if defined(ENABLE_PROCESSING_STATS)
         startTimer_();
 #endif // defined(ENABLE_PROCESSING_STATS)
@@ -872,6 +899,15 @@ void TxRxThread::rxProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
         freedvInterface.setSquelch(g_SquelchActive, g_SquelchLevel);
 
         auto outputSamples = pipeline_->execute(inputSamples_.get(), nsam, &nout);
+        
+        // Debug: track input/output sample count ratio in analog mode
+        static int analogDebugCount = 0;
+        if (g_analog && (++analogDebugCount <= 10 || analogDebugCount % 100 == 0))
+        {
+            fprintf(stderr, "TxRxThread ANALOG: input=%d samples, output=%d samples (ratio=%.2f)\n",
+                    nsam, nout, (float)nout / (float)nsam);
+            fflush(stderr);
+        }
         
         if (nout > 0 && outputSamples != nullptr)
         {

@@ -51,6 +51,9 @@ public:
     virtual bool isRunning() override;
     virtual int64_t getLatencyInMicroseconds() override;
     
+    // Real-time helper - use shorter sleep when there's data waiting
+    virtual void stopRealTimeWork(bool fastMode = false) override;
+    
     // TCI-specific methods
     void setTrx(int trx);
     int getTrx() const;

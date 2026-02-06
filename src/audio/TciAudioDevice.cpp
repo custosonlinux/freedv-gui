@@ -158,6 +158,25 @@ int64_t TciAudioDevice::getLatencyInMicroseconds()
     return estimatedLatency_;
 }
 
+void TciAudioDevice::stopRealTimeWork(bool fastMode)
+{
+    // For TCI, we want to process data quickly to keep up with the stream.
+    // When fastMode is true (output FIFO needs data OR input is backing up),
+    // use a very short sleep. When false, use a slightly longer sleep.
+    // Note: Even in fast mode we need SOME sleep to avoid spinning the CPU
+    // when waiting for output FIFO to drain.
+    if (fastMode)
+    {
+        // Very short sleep - quick response but not CPU-spinning
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
+    else
+    {
+        // Short sleep when everything is stable
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
+
 void TciAudioDevice::setTrx(int trx)
 {
     trx_ = trx;
@@ -174,12 +193,33 @@ void TciAudioDevice::enqueueTxAudio(const short* samples, size_t numSamples)
         return;
     
     std::lock_guard<std::mutex> lock(txMutex_);
+    
+    // Limit TX queue size to prevent memory exhaustion (max 10 seconds worth)
+    const size_t MAX_QUEUE_CHUNKS = 500;  // ~10s at 20ms chunks
+    
+    if (txQueue_.size() >= MAX_QUEUE_CHUNKS)
+    {
+        // TX queue overflow - drop oldest chunk
+        txQueue_.pop();
+        fprintf(stderr, "TCI Audio: TX queue overflow, dropped oldest chunk\n");
+        fflush(stderr);
+    }
+    
     txQueue_.push(std::vector<short>(samples, samples + numSamples));
     txCv_.notify_one();
 }
 
 void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_t* data, size_t dataSize __attribute__((unused)))
 {
+    // Debug: log all incoming streams
+    static int streamCount = 0;
+    if (++streamCount <= 5 || streamCount % 100 == 0)
+    {
+        fprintf(stderr, "TCI Audio: handleStream_ called - type=%u, receiver=%u, length=%u, format=%u, rate=%u (our trx=%d)\n",
+                header.type, header.receiver, header.length, header.format, header.sample_rate, trx_);
+        fflush(stderr);
+    }
+    
     // Only process streams for our TRX
     if (static_cast<int>(header.receiver) != trx_)
     {
@@ -213,10 +253,53 @@ void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_
                 return;
         }
         
-        // Add to RX buffer
+        // Debug: log sample conversion
+        static int convCount = 0;
+        if (++convCount <= 5)
+        {
+            fprintf(stderr, "TCI Audio: Converted %zu samples, first few: %d %d %d %d\n",
+                    samples.size(),
+                    samples.size() > 0 ? samples[0] : 0,
+                    samples.size() > 1 ? samples[1] : 0,
+                    samples.size() > 2 ? samples[2] : 0,
+                    samples.size() > 3 ? samples[3] : 0);
+            fflush(stderr);
+        }
+        
+        // Add to RX buffer with overflow protection
         {
             std::lock_guard<std::mutex> lock(rxMutex_);
+            
+            // Limit buffer size to prevent memory exhaustion (max 5 seconds at 48kHz)
+            const size_t MAX_BUFFER_SIZE = 48000 * 5;
+            
+            if (rxBuffer_.size() + samples.size() > MAX_BUFFER_SIZE)
+            {
+                // Buffer overflow - drop oldest samples to make room
+                size_t overflow = (rxBuffer_.size() + samples.size()) - MAX_BUFFER_SIZE;
+                if (overflow >= rxBuffer_.size())
+                {
+                    rxBuffer_.clear();
+                }
+                else
+                {
+                    rxBuffer_.erase(rxBuffer_.begin(), rxBuffer_.begin() + overflow);
+                }
+                fprintf(stderr, "TCI Audio: RX buffer overflow, dropped %zu samples\n", overflow);
+                fflush(stderr);
+            }
+            
             rxBuffer_.insert(rxBuffer_.end(), samples.begin(), samples.end());
+            
+            // Debug: log buffer status
+            static int bufCount = 0;
+            if (++bufCount <= 5 || bufCount % 50 == 0)
+            {
+                fprintf(stderr, "TCI Audio: RX buffer now has %zu samples (added %zu)\n",
+                        rxBuffer_.size(), samples.size());
+                fflush(stderr);
+            }
+            
             lastRxTime_ = std::chrono::steady_clock::now();
         }
         
@@ -271,6 +354,9 @@ void TciAudioDevice::rxThreadFunc_()
 {
     const size_t chunkSize = 1024;  // Process 1024 samples at a time
     
+    fprintf(stderr, "TCI Audio: RX thread started, onAudioDataFunction=%p\n", (void*)onAudioDataFunction);
+    fflush(stderr);
+    
     while (!shouldStop_)
     {
         std::vector<short> samples;
@@ -278,13 +364,32 @@ void TciAudioDevice::rxThreadFunc_()
         {
             std::unique_lock<std::mutex> lock(rxMutex_);
             
-            // Wait for data or stop signal
-            rxCv_.wait_for(lock, std::chrono::milliseconds(100), [this, chunkSize]() {
+            // Wait for data or stop signal (with timeout to prevent indefinite blocking)
+            bool hasData = rxCv_.wait_for(lock, std::chrono::milliseconds(100), [this, chunkSize]() {
                 return shouldStop_ || rxBuffer_.size() >= chunkSize;
             });
             
             if (shouldStop_)
+            {
+                fprintf(stderr, "TCI Audio: RX thread stopping\n");
+                fflush(stderr);
                 break;
+            }
+            
+            if (!hasData || rxBuffer_.size() < chunkSize)
+            {
+                // Timeout or not enough data yet
+                continue;
+            }
+            
+            // Debug: show buffer status periodically
+            static int rxCount = 0;
+            if (++rxCount <= 5 || rxCount % 50 == 0)
+            {
+                fprintf(stderr, "TCI Audio: RX thread processing, buffer size=%zu, extracting %zu samples\n", 
+                        rxBuffer_.size(), chunkSize);
+                fflush(stderr);
+            }
             
             if (rxBuffer_.size() >= chunkSize)
             {
@@ -295,7 +400,24 @@ void TciAudioDevice::rxThreadFunc_()
         
         if (!samples.empty() && onAudioDataFunction)
         {
-            onAudioDataFunction(*this, samples.data(), samples.size() * sizeof(short), onAudioDataState);
+            static int callbackCount = 0;
+            if (++callbackCount <= 5 || callbackCount % 50 == 0)
+            {
+                fprintf(stderr, "TCI Audio: Calling onAudioDataFunction with %zu samples\n", samples.size());
+                fflush(stderr);
+            }
+            // Pass sample count, NOT byte count!
+            onAudioDataFunction(*this, samples.data(), samples.size(), onAudioDataState);
+        }
+        else if (!samples.empty() && !onAudioDataFunction)
+        {
+            static bool warned = false;
+            if (!warned)
+            {
+                fprintf(stderr, "TCI Audio: WARNING - onAudioDataFunction is NULL, audio will be lost!\n");
+                fflush(stderr);
+                warned = true;
+            }
         }
     }
 }
@@ -305,15 +427,30 @@ void TciAudioDevice::txThreadFunc_()
     // This thread is for handling TX audio that comes from FreeDV
     // and needs to be queued for transmission via TCI
     
+    fprintf(stderr, "TCI Audio: TX thread started\n");
+    fflush(stderr);
+    
     while (!shouldStop_)
     {
-        // Wait for TX audio from FreeDV
+        // Wait for TX audio from FreeDV or stop signal
         // In this implementation, FreeDV will call onAudioDataFunction with TX data
         // which we'll queue up. The actual sending happens in response to TX_CHRONO.
         
         std::unique_lock<std::mutex> lock(txMutex_);
-        txCv_.wait_for(lock, std::chrono::milliseconds(100));
+        txCv_.wait_for(lock, std::chrono::milliseconds(100), [this]() {
+            return shouldStop_ || !txQueue_.empty();
+        });
+        
+        if (shouldStop_)
+        {
+            fprintf(stderr, "TCI Audio: TX thread stopping\n");
+            fflush(stderr);
+            break;
+        }
     }
+    
+    fprintf(stderr, "TCI Audio: TX thread exited\n");
+    fflush(stderr);
 }
 
 void TciAudioDevice::convertInt16ToShort_(const uint8_t* data, size_t numSamples, std::vector<short>& output)

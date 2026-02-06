@@ -187,6 +187,19 @@ short* RADEReceiveStep::execute(short* inputSamples, int numInputSamples, int* n
     auto maxSamples = getOutputSampleRate();
     *numOutputSamples = 0;
     
+    // Debug: log input to RADE modem
+    static int radeDebugCount = 0;
+    if (++radeDebugCount <= 10 || radeDebugCount % 200 == 0)
+    {
+        fprintf(stderr, "RADE RX: input %d samples at %d Hz, first: %d %d %d %d\n",
+                numInputSamples, getInputSampleRate(),
+                numInputSamples > 0 ? inputSamples[0] : 0,
+                numInputSamples > 1 ? inputSamples[1] : 0,
+                numInputSamples > 2 ? inputSamples[2] : 0,
+                numInputSamples > 3 ? inputSamples[3] : 0);
+        fflush(stderr);
+    }
+
     inputSampleFifo_.write(inputSamples, numInputSamples);
 
     FREEDV_BEGIN_VERIFIED_SAFE 
@@ -278,6 +291,14 @@ short* RADEReceiveStep::execute(short* inputSamples, int numInputSamples, int* n
         sync = rade_sync(dv_);
         snr = rade_snrdB_3k_est(dv_);
     FREEDV_END_REALTIME_UNSAFE
+
+    // Debug: log sync state
+    static int radeSyncDebug = 0;
+    if (++radeSyncDebug <= 20 || radeSyncDebug % 200 == 0)
+    {
+        fprintf(stderr, "RADE RX: sync=%d, snr=%d dB, nout=%d\n", sync, snr, *numOutputSamples);
+        fflush(stderr);
+    }
 
     syncState_.store(sync, std::memory_order_release);
     snr_.store(snr, std::memory_order_release);
