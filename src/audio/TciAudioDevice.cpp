@@ -86,6 +86,12 @@ void TciAudioDevice::start()
     shouldStop_ = false;
     running_ = true;
     
+    // Enable RX audio streaming from TCI server
+    std::string cmd = "audio_start:" + std::to_string(trx_) + ";";
+    wsClient_->sendCommand(cmd);
+    fprintf(stderr, "TCI Audio: Sent %s to enable RX audio streaming\n", cmd.c_str());
+    fflush(stderr);
+    
     // Start RX thread
     rxThread_ = std::make_unique<std::thread>(&TciAudioDevice::rxThreadFunc_, this);
     
@@ -102,6 +108,15 @@ void TciAudioDevice::stop()
     
     shouldStop_ = true;
     running_ = false;
+    
+    // Disable RX audio streaming from TCI server (only if still connected)
+    if (wsClient_ && wsClient_->isConnected())
+    {
+        std::string cmd = "audio_stop:" + std::to_string(trx_) + ";";
+        wsClient_->sendCommand(cmd);
+        fprintf(stderr, "TCI Audio: Sent %s to disable RX audio streaming\n", cmd.c_str());
+        fflush(stderr);
+    }
     
     // Wake up all threads
     rxCv_.notify_all();

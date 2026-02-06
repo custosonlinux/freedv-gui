@@ -416,8 +416,9 @@ void TciRigController::onConnected_()
     // Request initial settings
     sendCommand_("audio_sample_rate", {std::to_string(48000)});
     
-    // Start audio streaming
-    sendCommand_("audio_start", {std::to_string(trx_)});
+    // Note: audio_start command is sent by TciAudioDevice::start() when the audio
+    // device is ready to receive data. Sending it here would cause audio packets
+    // to arrive before the audio device is initialized, causing crashes.
     
     // Set initial mode to DIGU for FreeDV
     setMode(DIGU);
