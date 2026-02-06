@@ -637,6 +637,29 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
         
         wxGetApp().appConfiguration.rigControlConfiguration.useTCI = m_ckUseTCIPTT->GetValue();
 
+        // Save TCI settings when TCI PTT is selected (TCI box is visible)
+        if (m_ckUseTCIPTT->GetValue())
+        {
+            wxGetApp().appConfiguration.rigControlConfiguration.tciHostname = m_tcTciHostname->GetValue();
+            
+            long port;
+            m_tcTciPort->GetValue().ToLong(&port);
+            wxGetApp().appConfiguration.rigControlConfiguration.tciPort = (unsigned int)port;
+            
+            bool tciAudioValue = m_ckUseTCIAudio->GetValue();
+            wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio = tciAudioValue;
+            
+            fprintf(stderr, "EASY_SETUP: Checkbox read as = %d\n", tciAudioValue ? 1 : 0);
+            fprintf(stderr, "EASY_SETUP: Config object now has useTCIAudio = %d\n", 
+                    wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio.get() ? 1 : 0);
+            fflush(stderr);
+        }
+        else
+        {
+            fprintf(stderr, "EASY_SETUP: TCI PTT not selected, skipping TCI audio save\n");
+            fflush(stderr);
+        }
+
         if (m_ckUseHamlibPTT->GetValue())
         {
             wxGetApp().m_intHamlibRig = m_cbRigName->GetSelection();
@@ -669,18 +692,20 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
             wxGetApp().appConfiguration.rigControlConfiguration.serialPTTUseDTR                 = m_rbUseDTR->GetValue();
             wxGetApp().appConfiguration.rigControlConfiguration.serialPTTPolarityDTR                 = m_ckDTRPos->IsChecked();
         }
-        else if (m_ckUseTCIPTT->GetValue())
-        {
-            wxGetApp().appConfiguration.rigControlConfiguration.tciHostname = m_tcTciHostname->GetValue();
-            
-            long port;
-            m_tcTciPort->GetValue().ToLong(&port);
-            wxGetApp().appConfiguration.rigControlConfiguration.tciPort = (unsigned int)port;
-            
-            wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio = m_ckUseTCIAudio->GetValue();
-        }
+        
+        // Debug: Log TCI audio value just before save
+        fprintf(stderr, "EASY_SETUP: Just before save(), useTCIAudio = %d\n", 
+                wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio.get() ? 1 : 0);
+        fflush(stderr);
         
         wxGetApp().appConfiguration.save(pConfig);
+        pConfig->Flush();  // Force immediate write to disk
+        
+        // Debug: Log TCI audio value just after save
+        fprintf(stderr, "EASY_SETUP: Just after save(), useTCIAudio = %d\n", 
+                wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio.get() ? 1 : 0);
+        fprintf(stderr, "EASY_SETUP: Forced config flush to disk\n");
+        fflush(stderr);
     }
 }
 
