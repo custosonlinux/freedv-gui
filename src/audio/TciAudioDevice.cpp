@@ -35,20 +35,34 @@ TciAudioDevice::TciAudioDevice(std::shared_ptr<tci::TciWebSocketClient> wsClient
     , shouldStop_(false)
     , estimatedLatency_(100000)  // Default 100ms
 {
-    // Set up stream callback
-    wsClient_->setStreamCallback([this](const tci::StreamHeader& header, const uint8_t* data, size_t dataSize) {
-        handleStream_(header, data, dataSize);
+    // Callback registration moved to initialize() to use weak_ptr safely
+}
+
+void TciAudioDevice::initialize()
+{
+    // Use weak_ptr to prevent use-after-free when device is destroyed
+    std::weak_ptr<TciAudioDevice> weakThis = shared_from_this();
+    
+    wsClient_->setStreamCallback([weakThis](const tci::StreamHeader& header, const uint8_t* data, size_t dataSize) {
+        auto strongThis = weakThis.lock();
+        if (strongThis) {
+            strongThis->handleStream_(header, data, dataSize);
+        }
     });
 }
 
 TciAudioDevice::~TciAudioDevice()
 {
+    // Stop threads first
     stop();
     
-    // Clear the stream callback to prevent use-after-free
+    // Clear the stream callback to prevent future invocations
     if (wsClient_)
     {
         wsClient_->setStreamCallback(nullptr);
+        
+        // Small delay to ensure any in-flight callbacks complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
@@ -89,7 +103,8 @@ void TciAudioDevice::stop()
     shouldStop_ = true;
     running_ = false;
     
-    // Wake up threads
+    // Wake up all threads
+    rxCv_.notify_all();
     txCv_.notify_all();
     
     // Wait for threads to finish
@@ -138,6 +153,16 @@ int TciAudioDevice::getTrx() const
     return trx_;
 }
 
+void TciAudioDevice::enqueueTxAudio(const short* samples, size_t numSamples)
+{
+    if (!samples || numSamples == 0)
+        return;
+    
+    std::lock_guard<std::mutex> lock(txMutex_);
+    txQueue_.push(std::vector<short>(samples, samples + numSamples));
+    txCv_.notify_one();
+}
+
 void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_t* data, size_t dataSize __attribute__((unused)))
 {
     // Only process streams for our TRX
@@ -179,6 +204,9 @@ void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_
             rxBuffer_.insert(rxBuffer_.end(), samples.begin(), samples.end());
             lastRxTime_ = std::chrono::steady_clock::now();
         }
+        
+        // Wake up RX thread
+        rxCv_.notify_one();
     }
     else if (header.type == tci::TX_CHRONO)
     {
@@ -233,7 +261,15 @@ void TciAudioDevice::rxThreadFunc_()
         std::vector<short> samples;
         
         {
-            std::lock_guard<std::mutex> lock(rxMutex_);
+            std::unique_lock<std::mutex> lock(rxMutex_);
+            
+            // Wait for data or stop signal
+            rxCv_.wait_for(lock, std::chrono::milliseconds(100), [this, chunkSize]() {
+                return shouldStop_ || rxBuffer_.size() >= chunkSize;
+            });
+            
+            if (shouldStop_)
+                break;
             
             if (rxBuffer_.size() >= chunkSize)
             {
@@ -245,11 +281,6 @@ void TciAudioDevice::rxThreadFunc_()
         if (!samples.empty() && onAudioDataFunction)
         {
             onAudioDataFunction(*this, samples.data(), samples.size() * sizeof(short), onAudioDataState);
-        }
-        else
-        {
-            // No data available, sleep a bit
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
     }
 }

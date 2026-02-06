@@ -198,23 +198,10 @@ void TciRigController::setMode(Mode mode)
 
 void TciRigController::requestCurrentFrequencyMode()
 {
-    if (!connected_)
-    {
-        return;
-    }
-    
-    enqueue_([this]() {
-        // Request current VFO
-        std::vector<std::string> args;
-        args.push_back(std::to_string(trx_));
-        args.push_back(std::to_string(channel_));
-        sendCommand_("vfo", args);
-        
-        // Request current modulation
-        args.clear();
-        args.push_back(std::to_string(trx_));
-        sendCommand_("modulation", args);
-    });
+    // TCI protocol sends frequency and mode updates automatically when they change.
+    // No need to poll - the server pushes updates via VFO: and MODULATION: commands
+    // which are handled by handleVfo_() and handleModulation_() callbacks.
+    // Polling would just create unnecessary command spam on the network.
 }
 
 int TciRigController::getRigResponseTimeMicroseconds()

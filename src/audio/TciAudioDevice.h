@@ -34,11 +34,14 @@
 #include <atomic>
 #include <queue>
 
-class TciAudioDevice : public IAudioDevice
+class TciAudioDevice : public IAudioDevice, public std::enable_shared_from_this<TciAudioDevice>
 {
 public:
     TciAudioDevice(std::shared_ptr<tci::TciWebSocketClient> wsClient, int trx = 0);
     virtual ~TciAudioDevice();
+    
+    // Must be called after construction to register callbacks
+    void initialize();
     
     // IAudioDevice interface
     virtual int getNumChannels() FREEDV_NONBLOCKING override;
@@ -51,6 +54,9 @@ public:
     // TCI-specific methods
     void setTrx(int trx);
     int getTrx() const;
+    
+    // Enqueue TX audio from FreeDV for transmission via TCI
+    void enqueueTxAudio(const short* samples, size_t numSamples);
     
 private:
     std::shared_ptr<tci::TciWebSocketClient> wsClient_;
@@ -68,6 +74,7 @@ private:
     
     // RX audio buffering
     std::mutex rxMutex_;
+    std::condition_variable rxCv_;
     std::vector<short> rxBuffer_;
     std::unique_ptr<std::thread> rxThread_;
     

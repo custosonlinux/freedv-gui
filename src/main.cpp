@@ -2929,16 +2929,7 @@ void MainFrame::startRxStream()
                     useTciAudio);
             fflush(stderr);
             
-            // TODO: TCI audio is not yet fully implemented. The TciAudioDevice needs
-            // significant rework to integrate properly with FreeDV's audio pipeline.
-            // For now, TCI is only used for PTT and frequency control.
-            if (useTciAudio)
-            {
-                fprintf(stderr, "TCI Audio: TCI audio support is not yet implemented. Using sound cards for audio.\n");
-                fflush(stderr);
-            }
-            
-            if (false && useTciAudio && wxGetApp().rigFrequencyController != nullptr)
+            if (useTciAudio && wxGetApp().rigFrequencyController != nullptr)
             {
                 // Get TCI WebSocket client from TciRigController
                 auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
@@ -2947,15 +2938,26 @@ void MainFrame::startRxStream()
                     auto wsClient = tciRigController->getWebSocketClient();
                     int trx = tciRigController->getTrx();
                     
-                    // Create ONE TCI audio device instance for RX-only mode
-                    // The same device handles both input (from radio) and output (to speaker)
+                    // Create TCI audio device for RX audio from radio
                     auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
-                    rxInSoundDevice = tciDevice;
-                    rxOutSoundDevice = tciDevice;
+                    tciDevice->initialize();  // Register callbacks safely
                     
-                    fprintf(stderr, "TCI Audio: Created TCI audio device (shared for RX in/out) for TRX %d\n", trx);
+                    // RX from radio via TCI
+                    rxInSoundDevice = tciDevice;
+                    
+                    fprintf(stderr, "TCI Audio: Created TCI audio device for RX from radio (TRX %d)\n", trx);
                     fflush(stderr);
                 }
+                else
+                {
+                    fprintf(stderr, "TCI Audio: Failed to get TCI rig controller\n");
+                    fflush(stderr);
+                }
+            }
+            else if (useTciAudio)
+            {
+                fprintf(stderr, "TCI Audio: TCI rig controller not available yet\n");
+                fflush(stderr);
             }
             
             // Fall back to regular sound cards if TCI audio not available
@@ -2963,6 +2965,8 @@ void MainFrame::startRxStream()
             {
                 rxInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 2);
             }
+            
+            // Output to speaker always uses local sound card
             if (!rxOutSoundDevice)
             {
                 rxOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 2);
@@ -3045,16 +3049,7 @@ void MainFrame::startRxStream()
                     useTciAudio);
             fflush(stderr);
             
-            // TODO: TCI audio is not yet fully implemented. The TciAudioDevice needs
-            // significant rework to integrate properly with FreeDV's audio pipeline.
-            // For now, TCI is only used for PTT and frequency control.
-            if (useTciAudio)
-            {
-                fprintf(stderr, "TCI Audio: TCI audio support is not yet implemented. Using sound cards for audio.\n");
-                fflush(stderr);
-            }
-            
-            if (false && useTciAudio && wxGetApp().rigFrequencyController != nullptr)
+            if (useTciAudio && wxGetApp().rigFrequencyController != nullptr)
             {
                 // Get TCI WebSocket client from TciRigController
                 auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
@@ -3063,15 +3058,30 @@ void MainFrame::startRxStream()
                     auto wsClient = tciRigController->getWebSocketClient();
                     int trx = tciRigController->getTrx();
                     
-                    // Create ONE TCI audio device for radio I/O (both RX and TX to/from radio)
-                    // The same device handles both directions
-                    auto tciRadioDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
-                    rxInSoundDevice = tciRadioDevice;
-                    txOutSoundDevice = tciRadioDevice;
+                    // Create TCI audio devices for radio I/O
+                    auto tciRxDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    tciRxDevice->initialize();
                     
-                    fprintf(stderr, "TCI Audio: Created TCI audio device (shared for radio I/O) for TRX %d\n", trx);
+                    auto tciTxDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    tciTxDevice->initialize();
+                    
+                    // RX from radio and TX to radio via TCI
+                    rxInSoundDevice = tciRxDevice;
+                    txOutSoundDevice = tciTxDevice;
+                    
+                    fprintf(stderr, "TCI Audio: Created TCI audio devices for radio RX/TX (TRX %d)\n", trx);
                     fflush(stderr);
                 }
+                else
+                {
+                    fprintf(stderr, "TCI Audio: Failed to get TCI rig controller\n");
+                    fflush(stderr);
+                }
+            }
+            else if (useTciAudio)
+            {
+                fprintf(stderr, "TCI Audio: TCI rig controller not available yet\n");
+                fflush(stderr);
             }
             
             // Fall back to regular sound cards if TCI audio not available
