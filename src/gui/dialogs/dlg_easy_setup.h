@@ -97,6 +97,7 @@ class EasySetupDialog : public wxDialog
         wxStaticBox* m_tciBox;
         wxTextCtrl *m_tcTciHostname;
         wxTextCtrl *m_tcTciPort;
+        wxCheckBox *m_ckUseTCIAudio;
 
         // Step 2d: advanced/test options
         wxButton* m_advancedPTTSetup;

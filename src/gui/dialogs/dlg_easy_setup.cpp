@@ -236,7 +236,7 @@ EasySetupDialog::EasySetupDialog(wxWindow* parent, wxWindowID id, const wxString
     m_tciBox = new wxStaticBox(setupCatControlBox, wxID_ANY, _("TCI CAT Control"));
     m_tciBox->Hide();
     wxStaticBoxSizer* tciBoxSizer = new wxStaticBoxSizer(m_tciBox, wxVERTICAL);
-    wxGridSizer* gridSizerTci = new wxGridSizer(2, 2, 0, 0);
+    wxGridSizer* gridSizerTci = new wxGridSizer(3, 2, 0, 0);
 
     /* TCI hostname */
     wxStaticText* tciHostnameLabel = new wxStaticText(m_tciBox, wxID_ANY, _("Hostname:"), wxDefaultPosition, wxDefaultSize, 0);
@@ -255,6 +255,13 @@ EasySetupDialog::EasySetupDialog(wxWindow* parent, wxWindowID id, const wxString
     m_tcTciPort = new wxTextCtrl(m_tciBox, wxID_ANY, wxT("40001"), wxDefaultPosition, wxDefaultSize, 0);
     m_tcTciPort->SetMinSize(wxSize(80, -1));
     gridSizerTci->Add(m_tcTciPort, 0, wxALL, 2);
+
+    /* TCI audio checkbox */
+    m_ckUseTCIAudio = new wxCheckBox(m_tciBox, wxID_ANY, _("Use TCI for Audio"), wxDefaultPosition, wxDefaultSize, 0);
+    m_ckUseTCIAudio->SetValue(false);
+    m_ckUseTCIAudio->SetToolTip(_("Use TCI protocol for radio audio (RX and TX) instead of local sound cards"));
+    gridSizerTci->Add(new wxStaticText(m_tciBox, wxID_ANY, wxT("")), 0, wxALL, 2); // Spacer
+    gridSizerTci->Add(m_ckUseTCIAudio, 0, wxALL | wxALIGN_LEFT, 2);
 
     tciBoxSizer->Add(gridSizerTci);
     setupCatControlBoxSizer->Add(tciBoxSizer, 0, wxALL | wxEXPAND, 2);
@@ -606,6 +613,7 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
 
             m_tcTciHostname->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.tciHostname);
             m_tcTciPort->SetValue(wxString::Format(wxT("%u"), wxGetApp().appConfiguration.rigControlConfiguration.tciPort.get()));
+            m_ckUseTCIAudio->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio);
         }
         else
         {
@@ -668,6 +676,8 @@ void EasySetupDialog::ExchangePttDeviceData(int inout)
             long port;
             m_tcTciPort->GetValue().ToLong(&port);
             wxGetApp().appConfiguration.rigControlConfiguration.tciPort = (unsigned int)port;
+            
+            wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio = m_ckUseTCIAudio->GetValue();
         }
         
         wxGetApp().appConfiguration.save(pConfig);

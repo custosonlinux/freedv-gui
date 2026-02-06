@@ -44,6 +44,12 @@ TciAudioDevice::TciAudioDevice(std::shared_ptr<tci::TciWebSocketClient> wsClient
 TciAudioDevice::~TciAudioDevice()
 {
     stop();
+    
+    // Clear the stream callback to prevent use-after-free
+    if (wsClient_)
+    {
+        wsClient_->setStreamCallback(nullptr);
+    }
 }
 
 int TciAudioDevice::getNumChannels() FREEDV_NONBLOCKING

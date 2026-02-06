@@ -36,6 +36,7 @@ RigControlConfiguration::RigControlConfiguration()
     , useTCI("/TCI/UseTCI", false)
     , tciHostname("/TCI/Hostname", "localhost")
     , tciPort("/TCI/Port", 50001)
+    , useTCIAudio("/TCI/UseAudio", false)
         
     , useSerialPTT("/Rig/UseSerialPTT", false)
     , serialPTTPort("/Rig/Port", "")
@@ -81,6 +82,7 @@ void RigControlConfiguration::load(wxConfigBase* config)
     load_(config, useTCI);
     load_(config, tciHostname);
     load_(config, tciPort);
+    load_(config, useTCIAudio);
     
     load_(config, useSerialPTT);
     load_(config, serialPTTPort);
@@ -119,6 +121,7 @@ void RigControlConfiguration::save(wxConfigBase* config)
     save_(config, useTCI);
     save_(config, tciHostname);
     save_(config, tciPort);
+    save_(config, useTCIAudio);
     
     save_(config, useSerialPTT);
     save_(config, serialPTTPort);

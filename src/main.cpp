@@ -42,6 +42,8 @@
 #include "os/os_interface.h"
 #include "freedv_interface.h"
 #include "audio/AudioEngineFactory.h"
+#include "audio/TciAudioDevice.h"
+#include "rig_control/TciRigController.h"
 #include "codec2_fdmdv.h"
 #include "pipeline/TxRxThread.h"
 #include "reporting/pskreporter.h"
@@ -2420,6 +2422,12 @@ void MainFrame::performFreeDVOn_()
         {
             wxGetApp().m_reporters.clear();
             
+            // Initialize TCI rig controller BEFORE starting audio stream if TCI audio is enabled
+            if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI)
+            {
+                OpenTciRig();
+            }
+            
             startRxStream();
 
             if (m_RxRunning)
@@ -2432,14 +2440,14 @@ void MainFrame::performFreeDVOn_()
                     });
                 }
 
-                // attempt to start PTT ......            
+                // attempt to start PTT (TCI was already opened above if applicable)
                 if (wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT)
                 {
                     OpenHamlibRig();
                 }
                 else if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI)
                 {
-                    OpenTciRig();
+                    // Already opened above, so skip
                 }
                 else if (wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT) 
                 {
@@ -2908,10 +2916,57 @@ void MainFrame::startRxStream()
         }
         else if (g_nSoundCards == 1)
         {
-            // RX-only setup.
+            // RX-only setup (or TCI audio).
             // Note: we assume 2 channels, but IAudioEngine will automatically downgrade to 1 channel if needed.
-            rxInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 2);
-            rxOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 2);
+            
+            // Check if TCI is enabled for audio
+            bool useTciAudio = wxGetApp().appConfiguration.rigControlConfiguration.useTCI && 
+                               wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio;
+            
+            fprintf(stderr, "TCI Audio: useTCI=%d, useTCIAudio=%d, combined=%d\n",
+                    wxGetApp().appConfiguration.rigControlConfiguration.useTCI.get(),
+                    wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio.get(),
+                    useTciAudio);
+            fflush(stderr);
+            
+            // TODO: TCI audio is not yet fully implemented. The TciAudioDevice needs
+            // significant rework to integrate properly with FreeDV's audio pipeline.
+            // For now, TCI is only used for PTT and frequency control.
+            if (useTciAudio)
+            {
+                fprintf(stderr, "TCI Audio: TCI audio support is not yet implemented. Using sound cards for audio.\n");
+                fflush(stderr);
+            }
+            
+            if (false && useTciAudio && wxGetApp().rigFrequencyController != nullptr)
+            {
+                // Get TCI WebSocket client from TciRigController
+                auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
+                if (tciRigController)
+                {
+                    auto wsClient = tciRigController->getWebSocketClient();
+                    int trx = tciRigController->getTrx();
+                    
+                    // Create ONE TCI audio device instance for RX-only mode
+                    // The same device handles both input (from radio) and output (to speaker)
+                    auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    rxInSoundDevice = tciDevice;
+                    rxOutSoundDevice = tciDevice;
+                    
+                    fprintf(stderr, "TCI Audio: Created TCI audio device (shared for RX in/out) for TRX %d\n", trx);
+                    fflush(stderr);
+                }
+            }
+            
+            // Fall back to regular sound cards if TCI audio not available
+            if (!rxInSoundDevice)
+            {
+                rxInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 2);
+            }
+            if (!rxOutSoundDevice)
+            {
+                rxOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 2);
+            }
             
             bool failed = false;
             if (!rxInSoundDevice)
@@ -2975,13 +3030,73 @@ void MainFrame::startRxStream()
         }
         else
         {
-            // RX + TX setup
+            // RX + TX setup (or TCI audio full duplex)
             // Same note as above re: number of channels.
             // Note: TX devices are started here as RX device sample rates could change as a result (e.g. Bluetooth on macOS).
             bool failed = false;
             
-            txInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard2In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate, 2);
+            // Check if TCI is enabled for audio
+            bool useTciAudio = wxGetApp().appConfiguration.rigControlConfiguration.useTCI && 
+                               wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio;
             
+            fprintf(stderr, "TCI Audio: useTCI=%d, useTCIAudio=%d, combined=%d\n",
+                    wxGetApp().appConfiguration.rigControlConfiguration.useTCI.get(),
+                    wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio.get(),
+                    useTciAudio);
+            fflush(stderr);
+            
+            // TODO: TCI audio is not yet fully implemented. The TciAudioDevice needs
+            // significant rework to integrate properly with FreeDV's audio pipeline.
+            // For now, TCI is only used for PTT and frequency control.
+            if (useTciAudio)
+            {
+                fprintf(stderr, "TCI Audio: TCI audio support is not yet implemented. Using sound cards for audio.\n");
+                fflush(stderr);
+            }
+            
+            if (false && useTciAudio && wxGetApp().rigFrequencyController != nullptr)
+            {
+                // Get TCI WebSocket client from TciRigController
+                auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
+                if (tciRigController)
+                {
+                    auto wsClient = tciRigController->getWebSocketClient();
+                    int trx = tciRigController->getTrx();
+                    
+                    // Create ONE TCI audio device for radio I/O (both RX and TX to/from radio)
+                    // The same device handles both directions
+                    auto tciRadioDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    rxInSoundDevice = tciRadioDevice;
+                    txOutSoundDevice = tciRadioDevice;
+                    
+                    fprintf(stderr, "TCI Audio: Created TCI audio device (shared for radio I/O) for TRX %d\n", trx);
+                    fflush(stderr);
+                }
+            }
+            
+            // Fall back to regular sound cards if TCI audio not available
+            if (!txInSoundDevice)
+            {
+                txInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard2In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate, 2);
+            }
+            
+            if (!rxInSoundDevice)
+            {
+                rxInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 2);
+            }
+            
+            if (!txOutSoundDevice)
+            {
+                txOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 2);
+            }
+            
+            // RX Out (speaker) always uses local sound card, never TCI
+            if (!rxOutSoundDevice)
+            {
+                rxOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate, 2);
+            }
+            
+            // TX In (microphone) handling
             if (!txInSoundDevice)
             {
                 executeOnUiThreadAndWait_([]() {
@@ -3012,8 +3127,7 @@ void MainFrame::startRxStream()
                 txInSoundDevice->start();
             }
 
-            txOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 2);
-            
+            // TX Out (radio) handling
             if (!txOutSoundDevice && !failed)
             {
                 executeOnUiThreadAndWait_([]() {
@@ -3044,10 +3158,7 @@ void MainFrame::startRxStream()
                 txOutSoundDevice->start();
             }
             
-            rxInSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 2);
-
-            rxOutSoundDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate, 2);
-            
+            // RX In (radio) handling
             if (!rxInSoundDevice && !failed)
             {
                 executeOnUiThreadAndWait_([]() {

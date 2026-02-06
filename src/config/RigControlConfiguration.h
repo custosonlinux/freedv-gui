@@ -45,6 +45,7 @@ public:
     ConfigurationDataElement<bool> useTCI;
     ConfigurationDataElement<wxString> tciHostname;
     ConfigurationDataElement<unsigned int> tciPort;
+    ConfigurationDataElement<bool> useTCIAudio;
     
     ConfigurationDataElement<bool> useSerialPTT;
     ConfigurationDataElement<wxString> serialPTTPort;

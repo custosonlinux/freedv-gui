@@ -1093,49 +1093,20 @@ int MainApp::FilterEvent(wxEvent& event)
     if ((event.GetEventType() == wxEVT_KEY_DOWN) &&
         (((wxKeyEvent&)event).GetKeyCode() == WXK_SPACE))
         {
-            // Debug: Log spacebar detection and conditions
-            fprintf(stderr, "\n=== SPACEBAR KEY DETECTED ===\n");
+            // only use space to toggle PTT if we are running and no modal dialogs (like options) up
             bool mainWindowActive = frame->IsActive();
             bool reporterActiveButNotUpdatingTextMessage = 
                 frame->m_reporterDialog != nullptr && frame->m_reporterDialog->IsActive() && 
                 !frame->m_reporterDialog->isTextMessageFieldInFocus();
-            bool rxRunning = frame->m_RxRunning;
-            bool windowActive = mainWindowActive || reporterActiveButNotUpdatingTextMessage;
-            bool spaceBarEnabled = wxGetApp().appConfiguration.enableSpaceBarForPTT;
-            bool notReceiveOnly = !frame->isReceiveOnly();
-            
-            fprintf(stderr, "Conditions:\n");
-            fprintf(stderr, "  m_RxRunning: %s\n", rxRunning ? "TRUE" : "FALSE");
-            fprintf(stderr, "  mainWindowActive: %s\n", mainWindowActive ? "TRUE" : "FALSE");
-            fprintf(stderr, "  reporterActive: %s\n", reporterActiveButNotUpdatingTextMessage ? "TRUE" : "FALSE");
-            fprintf(stderr, "  windowActive (combined): %s\n", windowActive ? "TRUE" : "FALSE");
-            fprintf(stderr, "  enableSpaceBarForPTT: %s\n", spaceBarEnabled ? "TRUE" : "FALSE");
-            fprintf(stderr, "  notReceiveOnly: %s\n", notReceiveOnly ? "TRUE" : "FALSE");
-            fprintf(stderr, "  ALL CONDITIONS MET: %s\n", 
-                    (rxRunning && windowActive && spaceBarEnabled && notReceiveOnly) ? "TRUE" : "FALSE");
-            fflush(stderr);
-            
-            // only use space to toggle PTT if we are running and no modal dialogs (like options) up
-            if (rxRunning && windowActive && spaceBarEnabled && notReceiveOnly) {
+            if (frame->m_RxRunning && (mainWindowActive || reporterActiveButNotUpdatingTextMessage) && 
+                wxGetApp().appConfiguration.enableSpaceBarForPTT && !frame->isReceiveOnly()) {
 
                 // space bar controls tx/rx if keyer not running
                 if (frame->vk_state == VK_IDLE) {
-                    bool oldButtonValue = frame->m_btnTogPTT->GetValue();
-                    bool currentTx = g_tx.load(std::memory_order_acquire);
-                    fprintf(stderr, "\n=== SPACEBAR PRESSED ===\n");
-                    fprintf(stderr, "Before toggle - Button: %s, g_tx: %s\n", 
-                            oldButtonValue ? "TRUE" : "FALSE",
-                            currentTx ? "TRUE" : "FALSE");
-                    fflush(stderr);
-                    
                     if (frame->m_btnTogPTT->GetValue())
                         frame->m_btnTogPTT->SetValue(false);
                     else
                         frame->m_btnTogPTT->SetValue(true);
-
-                    fprintf(stderr, "After toggle - Button: %s\n", 
-                            frame->m_btnTogPTT->GetValue() ? "TRUE" : "FALSE");
-                    fflush(stderr);
 
                     // Update background color of button here because when toggling PTT via keyboard,
                     // the background color for some reason doesn't update inside togglePTT().
@@ -1195,18 +1166,10 @@ void MainFrame::OnTogBtnPTT (wxCommandEvent& event)
 
 void MainFrame::togglePTT(void) {
     std::chrono::high_resolution_clock highResClock;
-    
-    // Debug: Log current state before processing
-    bool currentTx = g_tx.load(std::memory_order_acquire);
-    bool buttonValue = m_btnTogPTT->GetValue();
-    fprintf(stderr, "\n=== togglePTT() called ===\n");
-    fprintf(stderr, "Current g_tx state: %s\n", currentTx ? "TRUE (transmitting)" : "FALSE (receiving)");
-    fprintf(stderr, "Button value: %s\n", buttonValue ? "TRUE (pressed)" : "FALSE (not pressed)");
-    fflush(stderr);
 
     // Change tabbed page in centre panel depending on PTT state
 
-    if (currentTx)
+    if (g_tx.load(std::memory_order_acquire))
     {
         // If PTT input is enabled, suspend further changes until after EOO is sent.
         if (wxGetApp().m_pttInSerialPort)
@@ -1407,10 +1370,6 @@ void MainFrame::togglePTT(void) {
     }
 
     auto newTx = m_btnTogPTT->GetValue();
-    fprintf(stderr, "\n=== Sending PTT command ===\n");
-    fprintf(stderr, "PTT state to send: %s\n", newTx ? "TRUE (TRANSMIT)" : "FALSE (RECEIVE)");
-    fflush(stderr);
-    
     if (wxGetApp().rigPttController != nullptr && wxGetApp().rigPttController->isConnected()) 
     {
         wxGetApp().rigPttController->ptt(newTx);
