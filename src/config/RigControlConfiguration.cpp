@@ -121,19 +121,7 @@ void RigControlConfiguration::save(wxConfigBase* config)
     save_(config, useTCI);
     save_(config, tciHostname);
     save_(config, tciPort);
-    
-    // Debug TCI Audio saving
-    fprintf(stderr, "RIG_CONFIG: About to save useTCIAudio, element name='%s', value=%d\n",
-            useTCIAudio.getElementName(), useTCIAudio.getWithoutProcessing() ? 1 : 0);
-    fflush(stderr);
-    
     save_(config, useTCIAudio);
-    
-    // Verify it was written
-    bool readBack;
-    config->Read(useTCIAudio.getElementName(), &readBack, false);
-    fprintf(stderr, "RIG_CONFIG: After save_, read back value=%d\n", readBack ? 1 : 0);
-    fflush(stderr);
     
     save_(config, useSerialPTT);
     save_(config, serialPTTPort);
