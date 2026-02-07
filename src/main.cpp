@@ -3405,6 +3405,17 @@ void MainFrame::startRxStream()
             m_txThread->start();
         }
 
+        // Debug: Log actual sample rates being used
+        int inputRate = rxInSoundDevice->getSampleRate();
+        int outputRate = rxOutSoundDevice->getSampleRate();
+        fprintf(stderr, "\n=== RX Thread Sample Rate Configuration ===\n");
+        fprintf(stderr, "Input sample rate:  %d Hz\n", inputRate);
+        fprintf(stderr, "Output sample rate: %d Hz\n", outputRate);
+        fprintf(stderr, "Sample rate match: %s\n",
+                (inputRate == outputRate) ? "YES (OK)" : "NO - ANALOG MODE WILL PLAY AT WRONG SPEED!");
+        fprintf(stderr, "===========================================\n\n");
+        fflush(stderr);
+
         m_rxThread = std::make_shared<TxRxThread>(false, rxInSoundDevice->getSampleRate(), rxOutSoundDevice->getSampleRate(), wxGetApp().linkStep, rxInSoundDevice);
 
         rxInSoundDevice->start();
