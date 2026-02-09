@@ -130,13 +130,23 @@ void TciRigController::ptt(bool state)
         
         fprintf(stderr, "TCI PTT: [QUEUE] New PTT state = %s\n", pttState_ ? "ON" : "OFF");
         
-        // TRX:trx_num,state;
+        // TRX:trx_num,state[,signal_source];
+        // CRITICAL: When PTT ON, must specify signal source "tci" as third parameter
+        // Otherwise eesdr3 defaults to microphone and never sends TX_CHRONO!
         std::vector<std::string> args;
         args.push_back(std::to_string(trx_));
         args.push_back(state ? "true" : "false");
         
-        fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s])\n", 
-                trx_, state ? "true" : "false");
+        if (state) {
+            // PTT ON: Specify "tci" as signal source so eesdr3 expects audio via TCI
+            args.push_back("tci");
+            fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s, tci])\n", 
+                    trx_, state ? "true" : "false");
+        } else {
+            // PTT OFF: No signal source needed
+            fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s])\n", 
+                    trx_, state ? "true" : "false");
+        }
         
         sendCommand_("trx", args);
         

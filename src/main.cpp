@@ -3104,6 +3104,10 @@ void MainFrame::startRxStream()
                     rxInSoundDevice = tciDevice;
                     txOutSoundDevice = tciDevice;
                     
+                    // Set TX callback NOW (before it gets overwritten)
+                    // TX_CHRONO needs to read from outfifo1 (OnTxOutAudioData_)
+                    tciDevice->setOnTxAudioData(&OnTxOutAudioData_, g_rxUserdata);
+                    
                     fprintf(stderr, "TCI Audio: Created TCI audio device for radio RX/TX (TRX %d)\n", trx);
                     fflush(stderr);
                 }
@@ -3413,6 +3417,10 @@ void MainFrame::startRxStream()
         // start tx/rx processing thread
         if (txInSoundDevice && txOutSoundDevice)
         {
+            fprintf(stderr, "Creating TX thread: txIn rate=%d, txOut rate=%d\n", 
+                    txInSoundDevice->getSampleRate(), txOutSoundDevice->getSampleRate());
+            fflush(stderr);
+            
             m_txThread = std::make_shared<TxRxThread>(true, txInSoundDevice->getSampleRate(), txOutSoundDevice->getSampleRate(), wxGetApp().linkStep, txInSoundDevice);
             
             if (!txInSoundDevice->isRunning())
@@ -3437,7 +3445,17 @@ void MainFrame::startRxStream()
                 return;
             }
 
+            fprintf(stderr, "Starting TX thread...\n");
+            fflush(stderr);
             m_txThread->start();
+            fprintf(stderr, "TX thread started successfully\n");
+            fflush(stderr);
+        }
+        else
+        {
+            fprintf(stderr, "TX thread NOT created: txInDevice=%p, txOutDevice=%p\n",
+                    (void*)txInSoundDevice.get(), (void*)txOutSoundDevice.get());
+            fflush(stderr);
         }
 
         // Debug: Log actual sample rates being used
@@ -3834,6 +3852,16 @@ void MainFrame::OnTxInAudioData_(IAudioDevice& dev, void* data, size_t size, voi
     paCallBackData* cbData = static_cast<paCallBackData*>(state);
     short* audioData = static_cast<short*>(data);
     short* tmpInput = cbData->tmpReadTxBuffer_.get();
+
+    static int micCallbackCount = 0;
+    if (++micCallbackCount <= 5 || micCallbackCount % 100 == 0)
+    {
+        fprintf(stderr, "OnTxInAudioData: size=%zu, endingTx=%d, modemRunning=%d, infifo2_used=%d\n",
+                size, endingTx.load(std::memory_order_acquire),
+                isModemRunning.load(std::memory_order_acquire),
+                cbData->infifo2 ? cbData->infifo2->numUsed() : -1);
+        fflush(stderr);
+    }
 
     if (!endingTx.load(std::memory_order_acquire)) 
     {

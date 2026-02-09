@@ -209,6 +209,12 @@ void TciAudioDevice::enqueueTxAudio(const short* samples, size_t numSamples)
     txCv_.notify_one();
 }
 
+void TciAudioDevice::setOnTxAudioData(AudioDataCallbackFn fn, void* state)
+{
+    onTxAudioDataFunction = fn;
+    onTxAudioDataState = state;
+}
+
 void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_t* data, size_t dataSize __attribute__((unused)))
 {
     // Debug: log all incoming streams
@@ -309,43 +315,47 @@ void TciAudioDevice::handleStream_(const tci::StreamHeader& header, const uint8_
     else if (header.type == tci::TX_CHRONO)
     {
         // TCI is requesting TX audio
-        // The length field indicates how many samples are needed
+        // The length field indicates how many samples are needed (MONO samples)
         uint32_t samplesNeeded = header.length;
         
-        // Get samples from TX queue
-        std::vector<short> txSamples;
-        
+        static int txChronoCount = 0;
+        if (++txChronoCount <= 5 || txChronoCount % 100 == 0)
         {
-            std::lock_guard<std::mutex> lock(txMutex_);
+            fprintf(stderr, "*** TX_CHRONO DETECTED! eesdr3 requesting %u samples ***\n", samplesNeeded);
+            fflush(stderr);
+        }
+        
+        // Allocate buffer for TX audio
+        std::vector<short> txSamples(samplesNeeded, 0);
+        
+        // Call onTxAudioDataFunction to pull audio from FreeDV's TX FIFO (outfifo1)
+        // This is analogous to how PulseAudio's StreamWriteCallback_ works
+        if (onTxAudioDataFunction)
+        {
+            onTxAudioDataFunction(*this, txSamples.data(), samplesNeeded, onTxAudioDataState);
             
-            // Collect requested number of samples from queue
-            while (!txQueue_.empty() && txSamples.size() < samplesNeeded)
+            if (txChronoCount <= 5 || txChronoCount % 100 == 0)
             {
-                auto& chunk = txQueue_.front();
-                size_t toCopy = std::min(samplesNeeded - txSamples.size(), chunk.size());
-                
-                txSamples.insert(txSamples.end(), chunk.begin(), chunk.begin() + toCopy);
-                
-                if (toCopy == chunk.size())
-                {
-                    txQueue_.pop();
-                }
-                else
-                {
-                    // Partial chunk consumed, keep remainder
-                    chunk.erase(chunk.begin(), chunk.begin() + toCopy);
-                    break;
-                }
+                fprintf(stderr, "TCI sendTxAudio_: first 4 samples: %d %d %d %d\n",
+                        samplesNeeded > 0 ? txSamples[0] : 0,
+                        samplesNeeded > 1 ? txSamples[1] : 0,
+                        samplesNeeded > 2 ? txSamples[2] : 0,
+                        samplesNeeded > 3 ? txSamples[3] : 0);
+                fflush(stderr);
             }
-            
-            // If we don't have enough samples, pad with silence
-            if (txSamples.size() < samplesNeeded)
+        }
+        else
+        {
+            static bool warned = false;
+            if (!warned)
             {
-                txSamples.resize(samplesNeeded, 0);
+                fprintf(stderr, "TCI Audio: WARNING - onTxAudioDataFunction is NULL, sending silence!\n");
+                fflush(stderr);
+                warned = true;
             }
         }
         
-        // Send TX audio
+        // Send TX audio to TCI server
         sendTxAudio_(txSamples.data(), txSamples.size());
     }
 }
@@ -354,7 +364,8 @@ void TciAudioDevice::rxThreadFunc_()
 {
     const size_t chunkSize = 1024;  // Process 1024 samples at a time
     
-    fprintf(stderr, "TCI Audio: RX thread started, onAudioDataFunction=%p\n", (void*)onAudioDataFunction);
+    fprintf(stderr, "TCI Audio: RX thread started, onAudioDataFunction=%p, onTxAudioDataFunction=%p\n", 
+            (void*)onAudioDataFunction, (void*)onTxAudioDataFunction);
     fflush(stderr);
     
     while (!shouldStop_)

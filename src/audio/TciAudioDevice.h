@@ -61,6 +61,10 @@ public:
     // Enqueue TX audio from FreeDV for transmission via TCI
     void enqueueTxAudio(const short* samples, size_t numSamples);
     
+    // Set TX audio callback (separate from RX callback)
+    // Used for TX_CHRONO messages to pull audio from outfifo1
+    void setOnTxAudioData(AudioDataCallbackFn fn, void* state);
+    
 private:
     std::shared_ptr<tci::TciWebSocketClient> wsClient_;
     int trx_;
@@ -80,6 +84,10 @@ private:
     std::condition_variable rxCv_;
     std::vector<short> rxBuffer_;
     std::unique_ptr<std::thread> rxThread_;
+    
+    // Separate TX callback (for TX_CHRONO pulling from outfifo1)
+    AudioDataCallbackFn onTxAudioDataFunction;
+    void* onTxAudioDataState;
     
     // Stream handler
     void handleStream_(const tci::StreamHeader& header, const uint8_t* data, size_t dataSize);

@@ -158,9 +158,17 @@ short* RADETransmitStep::execute(short* inputSamples, int numInputSamples, int* 
         return outputSamples_.get();
     }
     
+    static int radeExecCount = 0;
+    bool doLog = (radeExecCount++ < 20);
+    
     inputSampleFifo_.write(inputSamples, numInputSamples);
+    int inputFifoUsed = inputSampleFifo_.numUsed();
+    int outputFifoUsed = outputSampleFifo_.numUsed();
+    int loopIterations = 0;
+    
     while ((*numOutputSamples + numSamplesPerTx) < maxSamples && inputSampleFifo_.numUsed() >= LPCNET_FRAME_SIZE)
     {
+        loopIterations++;
         FREEDV_BEGIN_VERIFIED_SAFE
         int numRequiredFeaturesForRADE = rade_n_features_in_out(dv_);
         FREEDV_END_VERIFIED_SAFE
@@ -211,6 +219,15 @@ short* RADETransmitStep::execute(short* inputSamples, int numInputSamples, int* 
     if (*numOutputSamples > 0)
     {
         outputSampleFifo_.read(outputSamples_.get(), *numOutputSamples);
+    }
+    
+    if (doLog)
+    {
+        fprintf(stderr, "RADE TX: in=%d, inputFifo=%d→%d, outputFifo=%d→%d, loops=%d, nout=%d, maxSamp=%d, sampPerTx=%d\n",
+                numInputSamples, inputFifoUsed, inputSampleFifo_.numUsed(), 
+                outputFifoUsed, outputSampleFifo_.numUsed(), loopIterations, 
+                *numOutputSamples, maxSamples, numSamplesPerTx);
+        fflush(stderr);
     }
     
     return outputSamples_.get();
