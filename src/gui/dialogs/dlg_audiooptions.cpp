@@ -418,8 +418,8 @@ void AudioOptsDialog::OnInitDialog( wxInitDialogEvent& )
 //-------------------------------------------------------------------------
 bool AudioOptsDialog::setTextCtrlIfDevNameValid(wxTextCtrl *textCtrl, wxListCtrl *listCtrl, wxString const& devName)
 {
-    // ignore last list entry as it is the "none" entry
-    for(int i = 0; i < listCtrl->GetItemCount() - 1; i++) 
+    // Search all list entries including "none" (last entry)
+    for(int i = 0; i < listCtrl->GetItemCount(); i++) 
     {
         if (listCtrl->GetItemText(i, 0).IsSameAs(devName))
         {

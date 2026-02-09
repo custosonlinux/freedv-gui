@@ -380,11 +380,30 @@ void TciRigController::sendCommand_(const std::string& cmdName, const std::vecto
 tci::Modulation TciRigController::freeDvModeToTci_(Mode mode)
 {
     // Map FreeDV modes to TCI modes
-    // FreeDV ALWAYS uses USB for proper audio passthrough
-    fprintf(stderr, "TCI MODE: Mapping FreeDV mode %d to USB (forced)\n", static_cast<int>(mode));
-    
-    // Always return USB regardless of input mode
-    return tci::USB;
+    switch (mode)
+    {
+        case DIGU:
+            return tci::DIGU;
+            
+        case USB:
+            return tci::USB;
+            
+        case DIGL:
+            return tci::DIGL;
+            
+        case LSB:
+            return tci::LSB;
+            
+        case FM:
+            return tci::NFM;
+            
+        case AM:
+            return tci::AM;
+            
+        default:
+            // Default to DIGU for FreeDV digital modes
+            return tci::DIGU;
+    }
 }
 
 IRigFrequencyController::Mode TciRigController::tciModeToFreeDv_(tci::Modulation mod)
