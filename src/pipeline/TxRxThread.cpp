@@ -736,8 +736,33 @@ void TxRxThread::txProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
             paCallBackData* cbData = g_rxUserdata;
             cbData->outfifo1->reset();
             
-            // Still clear infifo2 is intentionally NOT done here anymore
-            // (see clearFifos_() where we removed infifo2->reset())
+            // Trim infifo2 to reasonable size (last 2 seconds) to prevent display lag
+            // The microphone runs continuously in TCI mode, potentially accumulating
+            // tens of seconds of audio. Keep only recent audio to avoid stale "Frm Mic" display.
+            int infifo2Used = cbData->infifo2->numUsed();
+            int maxSamplesToKeep = inputSampleRate_ * 2; // 2 seconds @ 32kHz = 64000 samples
+            if (infifo2Used > maxSamplesToKeep)
+            {
+                int samplesToDiscard = infifo2Used - maxSamplesToKeep;
+                fprintf(stderr, "TX START: Trimming infifo2 from %d to %d samples (discarding %d old samples = %.1f sec)\n",
+                        infifo2Used, maxSamplesToKeep, samplesToDiscard, (float)samplesToDiscard / inputSampleRate_);
+                fflush(stderr);
+                
+                // Discard old samples by reading and dropping them
+                short* discardBuffer = new short[samplesToDiscard];
+                cbData->infifo2->read(discardBuffer, samplesToDiscard);
+                delete[] discardBuffer;
+                
+                fprintf(stderr, "TX START: infifo2 now has %d samples (%.2f sec)\n",
+                        cbData->infifo2->numUsed(), (float)cbData->infifo2->numUsed() / inputSampleRate_);
+                fflush(stderr);
+            }
+            else
+            {
+                fprintf(stderr, "TX START: infifo2 has %d samples (%.2f sec) - no trimming needed\n",
+                        infifo2Used, (float)infifo2Used / inputSampleRate_);
+                fflush(stderr);
+            }
         }
 
         // This while loop locks the modulator to the sample rate of
@@ -765,6 +790,16 @@ void TxRxThread::txProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
         assert(nsam_in_48 > 0);
 
         int             nout;
+        
+        // Debug: Log TX thread state before entering processing loop
+        static int txWhileLogCount = 0;
+        if (txWhileLogCount++ < 10 || txWhileLogCount % 100 == 0)
+        {
+            fprintf(stderr, "TX thread: outfifo1 free=%d, need=%d, infifo2 used=%d, mustStop=%d\n",
+                    cbData->outfifo1->numFree(), nsam_one_modem_frame,
+                    cbData->infifo2->numUsed(), helper->mustStopWork());
+            fflush(stderr);
+        }
 
         while(!helper->mustStopWork() && (unsigned)cbData->outfifo1->numFree() >= nsam_one_modem_frame) {        
             // OK to generate a frame of modem output samples we need
