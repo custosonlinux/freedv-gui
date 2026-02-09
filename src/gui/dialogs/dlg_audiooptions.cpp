@@ -504,22 +504,39 @@ int AudioOptsDialog::ExchangeData(int inout)
                                       m_listCtrlTxOutDevices, 
                                       wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName);
 
-            if ((m_textCtrlRxIn->GetValue() != "none") && (m_textCtrlTxOut->GetValue() != "none")) {
-                // Build sample rate dropdown lists
+            // Build sample rate dropdown lists independently for each device
+            // This handles both standard two-card config and TCI audio mode (where TX Out = "none")
+            
+            if (m_textCtrlRxIn->GetValue() != "none") {
                 buildListOfSupportedSampleRates(m_cbSampleRateRxIn, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, AUDIO_IN);
-                buildListOfSupportedSampleRates(m_cbSampleRateTxOut, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, AUDIO_OUT);
-                
-                m_cbSampleRateRxIn->SetValue(wxString::Format(wxT("%i"), wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate.get()));
-                m_cbSampleRateTxOut->SetValue(wxString::Format(wxT("%i"), wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate.get()));
+                int rxInRate = wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate.get();
+                // Ensure valid sample rate (fix legacy configs with -1 or 0)
+                if (rxInRate < 16000) rxInRate = 48000;
+                m_cbSampleRateRxIn->SetValue(wxString::Format(wxT("%i"), rxInRate));
             }
-
-            if ((m_textCtrlTxIn->GetValue() != "none") && (m_textCtrlRxOut->GetValue() != "none")) {
-                // Build sample rate dropdown lists
+            
+            if (m_textCtrlTxOut->GetValue() != "none") {
+                buildListOfSupportedSampleRates(m_cbSampleRateTxOut, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, AUDIO_OUT);
+                int txOutRate = wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate.get();
+                if (txOutRate < 16000) txOutRate = 48000;
+                m_cbSampleRateTxOut->SetValue(wxString::Format(wxT("%i"), txOutRate));
+            } else {
+                // TCI audio mode: TX Out is "none", set fixed TCI sample rate
+                m_cbSampleRateTxOut->SetValue("48000");
+            }
+            
+            if (m_textCtrlTxIn->GetValue() != "none") {
                 buildListOfSupportedSampleRates(m_cbSampleRateTxIn, wxGetApp().appConfiguration.audioConfiguration.soundCard2In.deviceName, AUDIO_IN);
+                int txInRate = wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate.get();
+                if (txInRate < 16000) txInRate = 48000;
+                m_cbSampleRateTxIn->SetValue(wxString::Format(wxT("%i"), txInRate));
+            }
+            
+            if (m_textCtrlRxOut->GetValue() != "none") {
                 buildListOfSupportedSampleRates(m_cbSampleRateRxOut, wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.deviceName, AUDIO_OUT);
-                
-                m_cbSampleRateTxIn->SetValue(wxString::Format(wxT("%i"), wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate.get()));
-                m_cbSampleRateRxOut->SetValue(wxString::Format(wxT("%i"), wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate.get()));
+                int rxOutRate = wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate.get();
+                if (rxOutRate < 16000) rxOutRate = 48000;
+                m_cbSampleRateRxOut->SetValue(wxString::Format(wxT("%i"), rxOutRate));
             }
         }
     }
@@ -528,6 +545,7 @@ int AudioOptsDialog::ExchangeData(int inout)
     {
         int valid_one_card_config = 0;
         int valid_two_card_config = 0;
+        int valid_tci_audio_config = 0;
         wxString sampleRate1, sampleRate2, sampleRate3, sampleRate4;
 
         // ---------------------------------------------------------------
@@ -574,10 +592,24 @@ int AudioOptsDialog::ExchangeData(int inout)
             sampleRate4 = m_cbSampleRateTxOut->GetValue();
         }
 
-        log_debug("  valid_one_card_config: %d  valid_two_card_config: %d", valid_one_card_config, valid_two_card_config);
+        // TCI audio configuration: RX In + RX Out + TX In set, TX Out = "none"
+        // This is for TCI audio mode where radio I/O is handled by TCI network
 
-        if (!valid_one_card_config && !valid_two_card_config) {
-            wxMessageBox(wxT("Invalid one or two sound card configuration. For RX only, both devices in 'Receive' tab must be selected. Otherwise, all devices in both 'Receive' and 'Transmit' tabs must be selected."), wxT(""), wxOK);
+        if ((rxInAudioDeviceName != "none") && (rxOutAudioDeviceName != "none") &&
+            (txInAudioDeviceName != "none") && (txOutAudioDeviceName == "none")) {
+
+            valid_tci_audio_config = 1;
+
+            sampleRate1 = m_cbSampleRateRxIn->GetValue();
+            sampleRate2 = m_cbSampleRateRxOut->GetValue();
+            sampleRate3 = m_cbSampleRateTxIn->GetValue();
+            sampleRate4 = "48000";  // TCI protocol uses fixed 48kHz
+        }
+
+        log_debug("  valid_one_card_config: %d  valid_two_card_config: %d  valid_tci_audio_config: %d", valid_one_card_config, valid_two_card_config, valid_tci_audio_config);
+
+        if (!valid_one_card_config && !valid_two_card_config && !valid_tci_audio_config) {
+            wxMessageBox(wxT("Invalid sound card configuration. For RX only, both devices in 'Receive' tab must be selected. For full duplex, either all four devices must be selected, or use TCI audio mode (RX In, RX Out, TX In set with TX Out = 'none')."), wxT(""), wxOK);
             return -1;
         }
 
@@ -609,6 +641,20 @@ int AudioOptsDialog::ExchangeData(int inout)
             log_debug("  m_soundCard1OutSampleRate: %d", wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate.get());
         }
 
+        if (valid_tci_audio_config) {
+            g_nSoundCards = 2;  // Treat as full duplex
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = wxAtoi(sampleRate1);
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate = wxAtoi(sampleRate2);
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate = wxAtoi(sampleRate3);
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = wxAtoi(sampleRate4);  // 48000 for TCI
+            
+            log_debug("  TCI Audio Config:");
+            log_debug("  m_soundCard1InSampleRate: %d", wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate.get());
+            log_debug("  m_soundCard2OutSampleRate: %d", wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate.get());
+            log_debug("  m_soundCard2InSampleRate: %d", wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate.get());
+            log_debug("  m_soundCard1OutSampleRate: %d (TCI fixed)", wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate.get());
+        }
+
         log_debug("  g_nSoundCards: %d", g_nSoundCards);
         
         assert (pConfig != NULL);
@@ -624,6 +670,15 @@ int AudioOptsDialog::ExchangeData(int inout)
         {
             wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName = m_textCtrlRxIn->GetValue();
             wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName = m_textCtrlTxOut->GetValue();
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2In.deviceName = m_textCtrlTxIn->GetValue();
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.deviceName = m_textCtrlRxOut->GetValue();
+        }
+        else if (valid_tci_audio_config)
+        {
+            // TCI audio mode: RX from radio + speaker output for RX, microphone input for TX
+            // TX to radio is handled by TCI network (soundCard1Out = "none")
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName = m_textCtrlRxIn->GetValue();
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName = "none";  // TCI handles TX to radio
             wxGetApp().appConfiguration.audioConfiguration.soundCard2In.deviceName = m_textCtrlTxIn->GetValue();
             wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.deviceName = m_textCtrlRxOut->GetValue();
         }

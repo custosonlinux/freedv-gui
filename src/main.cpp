@@ -977,6 +977,41 @@ setDefaultMode:
             g_nSoundCards = 2;
     }
     
+    // TCI audio mode pattern: RX In set, TX Out="none", TX In set, RX Out set
+    // This indicates TCI handles radio I/O via network
+    bool isTciAudioPattern = hasSoundCard1InDevice && !hasSoundCard1OutDevice && 
+                              hasSoundCard2InDevice && hasSoundCard2OutDevice;
+    if (isTciAudioPattern) {
+        g_nSoundCards = 2;  // Treat as full duplex
+        
+        // Fix invalid sample rates for TCI audio mode (legacy configs may have 0 or -1)
+        const int MIN_SAMPLE_RATE = 16000;
+        const int TCI_DEFAULT_RATE = 48000;
+        bool configNeedsSave = false;
+        
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        
+        if (configNeedsSave) {
+            wxGetApp().appConfiguration.save(pConfig);
+            fprintf(stderr, "TCI Audio: Fixed invalid sample rates in configuration (set to %d Hz)\n", TCI_DEFAULT_RATE);
+        }
+    }
+    
     // Update the reporting list as needed.
     updateReportingFreqList_();
     
@@ -3058,18 +3093,18 @@ void MainFrame::startRxStream()
                     auto wsClient = tciRigController->getWebSocketClient();
                     int trx = tciRigController->getTrx();
                     
-                    // Create TCI audio devices for radio I/O
-                    auto tciRxDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
-                    tciRxDevice->initialize();
+                    // CRITICAL: Use single TCI device for both RX and TX to avoid:
+                    // - Duplicate WebSocket message handlers
+                    // - Race conditions in audio streaming
+                    // - Callback conflicts between multiple instances
+                    auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    tciDevice->initialize();
                     
-                    auto tciTxDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
-                    tciTxDevice->initialize();
+                    // Share the same TCI device for both RX from radio and TX to radio
+                    rxInSoundDevice = tciDevice;
+                    txOutSoundDevice = tciDevice;
                     
-                    // RX from radio and TX to radio via TCI
-                    rxInSoundDevice = tciRxDevice;
-                    txOutSoundDevice = tciTxDevice;
-                    
-                    fprintf(stderr, "TCI Audio: Created TCI audio devices for radio RX/TX (TRX %d)\n", trx);
+                    fprintf(stderr, "TCI Audio: Created TCI audio device for radio RX/TX (TRX %d)\n", trx);
                     fflush(stderr);
                 }
                 else
@@ -3512,6 +3547,41 @@ bool MainFrame::validateSoundCardSetup()
             g_nSoundCards = 2;
     }
     
+    // TCI audio mode pattern: RX In set, TX Out="none", TX In set, RX Out set
+    // This indicates TCI handles radio I/O via network
+    bool isTciAudioPattern = hasSoundCard1InDevice && !hasSoundCard1OutDevice && 
+                              hasSoundCard2InDevice && hasSoundCard2OutDevice;
+    if (isTciAudioPattern) {
+        g_nSoundCards = 2;  // Treat as full duplex
+        
+        // Fix invalid sample rates for TCI audio mode (legacy configs may have 0 or -1)
+        const int MIN_SAMPLE_RATE = 16000;
+        const int TCI_DEFAULT_RATE = 48000;
+        bool configNeedsSave = false;
+        
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        if (wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate < MIN_SAMPLE_RATE) {
+            wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate = TCI_DEFAULT_RATE;
+            configNeedsSave = true;
+        }
+        
+        if (configNeedsSave) {
+            wxGetApp().appConfiguration.save(pConfig);
+            fprintf(stderr, "TCI Audio: Fixed invalid sample rates in configuration (set to %d Hz)\n", TCI_DEFAULT_RATE);
+        }
+    }
+    
     // For the purposes of validation, number of channels isn't necessary.
     auto soundCard1InDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName, IAudioEngine::AUDIO_ENGINE_IN, wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate, 1);
     auto soundCard1OutDevice = engine->getAudioDevice(wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.deviceName, IAudioEngine::AUDIO_ENGINE_OUT, wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate, 1);
@@ -3579,7 +3649,7 @@ bool MainFrame::validateSoundCardSetup()
         const int MIN_SAMPLE_RATE = 16000;
         int failedSampleRate = 0;
         
-        // Validate sample rates
+        // Validate sample rates (skip devices set to "none")
         if (wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName != "none" && wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate < MIN_SAMPLE_RATE)
         {
             failedDeviceName = wxGetApp().appConfiguration.audioConfiguration.soundCard1In.deviceName.get();
