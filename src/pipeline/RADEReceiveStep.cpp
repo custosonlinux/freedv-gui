@@ -191,6 +191,7 @@ short* RADEReceiveStep::execute(short* inputSamples, int numInputSamples, int* n
     static int radeDebugCount = 0;
     if (++radeDebugCount <= 10 || radeDebugCount % 200 == 0)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "RADE RX: input %d samples at %d Hz, first: %d %d %d %d\n",
                 numInputSamples, getInputSampleRate(),
                 numInputSamples > 0 ? inputSamples[0] : 0,
@@ -198,6 +199,7 @@ short* RADEReceiveStep::execute(short* inputSamples, int numInputSamples, int* n
                 numInputSamples > 2 ? inputSamples[2] : 0,
                 numInputSamples > 3 ? inputSamples[3] : 0);
         fflush(stderr);
+#endif
     }
 
     inputSampleFifo_.write(inputSamples, numInputSamples);
@@ -296,8 +298,10 @@ short* RADEReceiveStep::execute(short* inputSamples, int numInputSamples, int* n
     static int radeSyncDebug = 0;
     if (++radeSyncDebug <= 20 || radeSyncDebug % 200 == 0)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "RADE RX: sync=%d, snr=%d dB, nout=%d\n", sync, snr, *numOutputSamples);
         fflush(stderr);
+#endif
     }
 
     syncState_.store(sync, std::memory_order_release);

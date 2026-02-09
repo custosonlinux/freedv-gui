@@ -155,6 +155,8 @@ set(STATIC_LIBGCC FALSE CACHE BOOL
 endif (LINUX)
 set(ENABLE_LTO FALSE CACHE BOOL
     "Enable Link Time Optimization (LTO)")
+set(TCI_DEBUG_LOGGING FALSE CACHE BOOL
+    "Enable verbose debug logging for TCI audio, rig control, and pipeline processing (warning: generates massive log output)")
 set(PGO_INSTRUMENT CACHE BOOL
     "Instrument for Profile Guided Optimization (PGO) (Clang only)")
 set(PGO_USE_PROFILE CACHE STRING
@@ -209,6 +211,11 @@ set(SANITIZERS_ENABLED TRUE)
 else(ENABLE_UBSAN OR ENABLE_TSAN OR ENABLE_ASAN OR ENABLE_RTSAN)
 set(SANITIZERS_ENABLED FALSE)
 endif(ENABLE_UBSAN OR ENABLE_TSAN OR ENABLE_ASAN OR ENABLE_RTSAN)
+
+if(TCI_DEBUG_LOGGING)
+    add_compile_definitions(TCI_DEBUG_LOGGING)
+    message(STATUS "TCI debug logging enabled (warning: generates massive log output)")
+endif(TCI_DEBUG_LOGGING)
 
 if(SIGN_WINDOWS_BINARIES)
     if(NOT WIN32 AND NOT MINGW)

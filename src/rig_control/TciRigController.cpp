@@ -39,7 +39,9 @@ TciRigController::TciRigController(std::string hostname, int port, int trx, int 
     , minFrequency_(0)
     , maxFrequency_(60000000)
 {
+#ifdef TCI_DEBUG_LOGGING
     fprintf(stderr, "TciRigController constructor: hostname='%s' port=%d\n", hostname_.c_str(), port_);
+#endif
     
     wsClient_ = std::make_shared<tci::TciWebSocketClient>();
     
@@ -108,27 +110,37 @@ bool TciRigController::isConnected()
 
 void TciRigController::ptt(bool state)
 {
+#ifdef TCI_DEBUG_LOGGING
     fprintf(stderr, "\n=== TCI PTT REQUEST ===\n");
     fprintf(stderr, "TCI PTT: Requested state = %s\n", state ? "ON (TRANSMIT)" : "OFF (RECEIVE)");
     fprintf(stderr, "TCI PTT: Connected = %s\n", connected_ ? "YES" : "NO");
     fprintf(stderr, "TCI PTT: TRX number = %d\n", trx_);
+#endif
     
     if (!connected_)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI PTT: ERROR - Not connected, cannot set PTT\n");
         fprintf(stderr, "======================\n\n");
+#endif
         return;
     }
     
+#ifdef TCI_DEBUG_LOGGING
     fprintf(stderr, "TCI PTT: Enqueueing PTT command...\n");
+#endif
     
     enqueue_([this, state]() {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI PTT: [QUEUE] Processing PTT command\n");
         fprintf(stderr, "TCI PTT: [QUEUE] Previous PTT state = %s\n", pttState_ ? "ON" : "OFF");
+#endif
         
         pttState_ = state;
         
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI PTT: [QUEUE] New PTT state = %s\n", pttState_ ? "ON" : "OFF");
+#endif
         
         // TRX:trx_num,state[,signal_source];
         // CRITICAL: When PTT ON, must specify signal source "tci" as third parameter
@@ -140,24 +152,32 @@ void TciRigController::ptt(bool state)
         if (state) {
             // PTT ON: Specify "tci" as signal source so eesdr3 expects audio via TCI
             args.push_back("tci");
+#ifdef TCI_DEBUG_LOGGING
             fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s, tci])\n", 
                     trx_, state ? "true" : "false");
+#endif
         } else {
             // PTT OFF: No signal source needed
+#ifdef TCI_DEBUG_LOGGING
             fprintf(stderr, "TCI PTT: [QUEUE] Calling sendCommand_(\"trx\", [%d, %s])\n", 
                     trx_, state ? "true" : "false");
+#endif
         }
         
         sendCommand_("trx", args);
         
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI PTT: [QUEUE] sendCommand_() returned\n");
         fprintf(stderr, "TCI PTT: [QUEUE] Notifying listeners...\n");
+#endif
         
         // Notify listeners
         onPttChange(this, state);
         
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI PTT: [QUEUE] PTT command complete\n");
         fprintf(stderr, "======================\n\n");
+#endif
     });
 }
 
@@ -448,8 +468,10 @@ void TciRigController::onConnected_()
     // Set RX filter bandwidth wide enough for FreeDV/RADE
     // RADE uses ~600-2350 Hz, so 100-2700 Hz gives good margin
     sendCommand_("rx_filter_band", {std::to_string(trx_), "100", "2700"});
+#ifdef TCI_DEBUG_LOGGING
     fprintf(stderr, "TCI: Set RX filter bandwidth to 100-2700 Hz for TRX %d\n", trx_);
     fflush(stderr);
+#endif
     
     // Note: audio_start command is sent by TciAudioDevice::start() when the audio
     // device is ready to receive data. Sending it here would cause audio packets

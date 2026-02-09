@@ -3856,11 +3856,13 @@ void MainFrame::OnTxInAudioData_(IAudioDevice& dev, void* data, size_t size, voi
     static int micCallbackCount = 0;
     if (++micCallbackCount <= 5 || micCallbackCount % 100 == 0)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "OnTxInAudioData: size=%zu, endingTx=%d, modemRunning=%d, infifo2_used=%d\n",
                 size, endingTx.load(std::memory_order_acquire),
                 isModemRunning.load(std::memory_order_acquire),
                 cbData->infifo2 ? cbData->infifo2->numUsed() : -1);
         fflush(stderr);
+#endif
     }
 
     if (!endingTx.load(std::memory_order_acquire)) 

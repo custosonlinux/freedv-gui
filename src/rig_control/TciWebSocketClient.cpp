@@ -172,19 +172,29 @@ namespace tci
     
     bool TciWebSocketClient::sendCommand(const std::string& command)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI WebSocket: sendCommand() called with: '%s'\n", command.c_str());
+#endif
         
         if (!connected_)
         {
+#ifdef TCI_DEBUG_LOGGING
             fprintf(stderr, "TCI WebSocket: ERROR - Not connected, cannot send command\n");
+#endif
             return false;
         }
         
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI WebSocket: Acquiring send mutex...\n");
+#endif
         std::lock_guard<std::mutex> lock(sendMutex_);
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI WebSocket: Calling sendData_()...\n");
+#endif
         bool result = sendData_(reinterpret_cast<const uint8_t*>(command.c_str()), command.length());
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TCI WebSocket: sendData_() returned %s\n", result ? "SUCCESS" : "FAILURE");
+#endif
         return result;
     }
     

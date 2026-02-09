@@ -716,9 +716,11 @@ void TxRxThread::txProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
     bool tmpTx = g_tx.load(std::memory_order_acquire);
     static int txProcLogCount = 0;
     if (txProcLogCount++ < 5) {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TX Processing check: g_nSoundCards=%d, halfDuplex=%d, g_tx=%d\n",
                 g_nSoundCards, tmpHalfDuplex, tmpTx);
         fflush(stderr);
+#endif
     }
     if (((g_nSoundCards == 2) && ((tmpHalfDuplex && tmpTx) || !tmpHalfDuplex || g_voice_keyer_tx.load(std::memory_order_acquire) || g_recVoiceKeyerFile || g_recFileFromMic))) {        
         if (deferReset_)
@@ -954,9 +956,11 @@ void TxRxThread::rxProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
     static int rxDebugCount = 0;
     if (++rxDebugCount <= 5 || rxDebugCount % 500 == 0)
     {
+#ifdef TCI_DEBUG_LOGGING
         fprintf(stderr, "TxRxThread RX: processInputFifo=%d, infifo1 used=%d, need=%d, outFifo free=%d, need=%d (analog=%d)\n",
                 processInputFifo, cbData->infifo1->numUsed(), nsam, outFifo->numFree(), nsam_one_speech_frame, g_analog);
         fflush(stderr);
+#endif
     }
 
     // while we have enough input samples available and enough space in the output FIFO ... 
@@ -966,9 +970,11 @@ void TxRxThread::rxProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
         static int rxProcessCount = 0;
         if (++rxProcessCount <= 10 || rxProcessCount % 500 == 0)
         {
+#ifdef TCI_DEBUG_LOGGING
             fprintf(stderr, "TxRxThread RX: Processing %d samples, first few: %d %d %d %d\n",
                     nsam, inputSamples_[0], inputSamples_[1], inputSamples_[2], inputSamples_[3]);
             fflush(stderr);
+#endif
         }
 
 #if defined(ENABLE_PROCESSING_STATS)
@@ -984,9 +990,11 @@ void TxRxThread::rxProcessing_(IRealtimeHelper* helper) FREEDV_NONBLOCKING
         static int analogDebugCount = 0;
         if (g_analog && (++analogDebugCount <= 10 || analogDebugCount % 100 == 0))
         {
+#ifdef TCI_DEBUG_LOGGING
             fprintf(stderr, "TxRxThread ANALOG: input=%d samples, output=%d samples (ratio=%.2f)\n",
                     nsam, nout, (float)nout / (float)nsam);
             fflush(stderr);
+#endif
         }
         
         if (nout > 0 && outputSamples != nullptr)
