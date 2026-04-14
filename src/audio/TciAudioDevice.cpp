@@ -392,7 +392,7 @@ void TciAudioDevice::rxThreadFunc_()
             std::unique_lock<std::mutex> lock(rxMutex_);
             
             // Wait for data or stop signal (with timeout to prevent indefinite blocking)
-            bool hasData = rxCv_.wait_for(lock, std::chrono::milliseconds(100), [this, chunkSize]() {
+            bool hasData = rxCv_.wait_for(lock, std::chrono::milliseconds(100), [this]() {
                 return shouldStop_ || rxBuffer_.size() >= chunkSize;
             });
             
