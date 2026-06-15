@@ -121,6 +121,10 @@ class AudioOptsDialog : public wxDialog
         wxButton* m_btnTxOutTest;
         PlotScalar* m_plotScalarTxOut;
 
+        wxCheckBox* m_ckUseTCIAudio;
+        void OnTCIAudioClicked(wxCommandEvent& event);
+        void updateTCIAudioState();
+
         wxButton* m_btnRefresh;
         wxStdDialogButtonSizer* m_sdbSizer1;
         wxButton* m_sdbSizer1OK;

@@ -264,6 +264,18 @@ AudioOptsDialog::AudioOptsDialog(wxWindow* parent, wxWindowID id, const wxString
     m_notebook1->AddPage(m_panelTx, _("Transmit"), false);
 
     bSizer4->Add(m_notebook1, 1, wxEXPAND | wxALL, 0);
+
+    // TCI radio audio
+    wxStaticBox* tciAudioBox = new wxStaticBox(m_panel1, wxID_ANY, _("TCI Radio Audio"));
+    wxStaticBoxSizer* tciAudioSizer = new wxStaticBoxSizer(tciAudioBox, wxHORIZONTAL);
+    m_ckUseTCIAudio = new wxCheckBox(tciAudioBox, wxID_ANY,
+        _("Use TCI for radio audio (replaces Input From Radio and Output To Radio sound devices)"));
+    tciAudioSizer->Add(m_ckUseTCIAudio, 0, wxALL | wxALIGN_CENTER_VERTICAL, 5);
+    tciAudioSizer->Add(new wxStaticText(tciAudioBox, wxID_ANY,
+        _("  —  TCI server configured in Tools → CAT and PTT Config")),
+        0, wxALIGN_CENTER_VERTICAL, 0);
+    bSizer4->Add(tciAudioSizer, 0, wxEXPAND | wxALL, 1);
+
     m_panel1->SetSizer(bSizer4);
     m_panel1->Layout();
     bSizer4->Fit(m_panel1);
@@ -349,6 +361,7 @@ AudioOptsDialog::AudioOptsDialog(wxWindow* parent, wxWindowID id, const wxString
     m_btnTxInTest->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnTxInTest ), NULL, this );
     m_btnTxOutTest->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnTxOutTest ), NULL, this );
 
+    m_ckUseTCIAudio->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(AudioOptsDialog::OnTCIAudioClicked), NULL, this);
     m_btnRefresh->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnRefreshClick ), NULL, this );
     m_sdbSizer1Apply->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnApplyAudioParameters ), NULL, this );
     m_sdbSizer1Cancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnCancelAudioParameters ), NULL, this );
@@ -395,6 +408,7 @@ AudioOptsDialog::~AudioOptsDialog()
     m_btnTxInTest->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnTxInTest ), NULL, this );
     m_btnTxOutTest->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AudioOptsDialog::OnTxOutTest ), NULL, this );
 
+    m_ckUseTCIAudio->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(AudioOptsDialog::OnTCIAudioClicked), NULL, this);
     m_btnRefresh->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(AudioOptsDialog::OnRefreshClick), NULL, this);
     m_sdbSizer1Apply->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(AudioOptsDialog::OnApplyAudioParameters), NULL, this);
     m_sdbSizer1Cancel->Disconnect(wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler(AudioOptsDialog::OnCancelAudioParameters), NULL, this);
@@ -436,12 +450,33 @@ bool AudioOptsDialog::setTextCtrlIfDevNameValid(wxTextCtrl *textCtrl, wxListCtrl
 //-------------------------------------------------------------------------
 // ExchangeData()
 //-------------------------------------------------------------------------
+void AudioOptsDialog::updateTCIAudioState()
+{
+    bool tci = m_ckUseTCIAudio->GetValue();
+    m_listCtrlRxInDevices->Enable(!tci);
+    m_textCtrlRxIn->Enable(!tci);
+    m_cbSampleRateRxIn->Enable(!tci);
+    m_btnRxInTest->Enable(!tci);
+    m_listCtrlTxOutDevices->Enable(!tci);
+    m_textCtrlTxOut->Enable(!tci);
+    m_cbSampleRateTxOut->Enable(!tci);
+    m_btnTxOutTest->Enable(!tci);
+}
+
+void AudioOptsDialog::OnTCIAudioClicked(wxCommandEvent&)
+{
+    updateTCIAudioState();
+}
+
 int AudioOptsDialog::ExchangeData(int inout)
 {
     if(inout == EXCHANGE_DATA_IN)
     {
         // Map sound card device numbers to tx/rx device numbers depending
         // on number of sound cards in use
+
+        m_ckUseTCIAudio->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio);
+        updateTCIAudioState();
 
         log_debug("EXCHANGE_DATA_IN:");
         log_debug("  g_nSoundCards: %d", g_nSoundCards);
@@ -526,6 +561,8 @@ int AudioOptsDialog::ExchangeData(int inout)
 
     if(inout == EXCHANGE_DATA_OUT)
     {
+        wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio = m_ckUseTCIAudio->GetValue();
+
         int valid_one_card_config = 0;
         int valid_two_card_config = 0;
         wxString sampleRate1, sampleRate2, sampleRate3, sampleRate4;
@@ -576,7 +613,7 @@ int AudioOptsDialog::ExchangeData(int inout)
 
         log_debug("  valid_one_card_config: %d  valid_two_card_config: %d", valid_one_card_config, valid_two_card_config);
 
-        if (!valid_one_card_config && !valid_two_card_config) {
+        if (!valid_one_card_config && !valid_two_card_config && !m_ckUseTCIAudio->GetValue()) {
             wxMessageBox(wxT("Invalid one or two sound card configuration. For RX only, both devices in 'Receive' tab must be selected. Otherwise, all devices in both 'Receive' and 'Transmit' tabs must be selected."), wxT(""), wxOK);
             return -1;
         }

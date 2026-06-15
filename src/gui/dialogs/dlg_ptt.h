@@ -69,7 +69,6 @@ class ComPortsDlg : public wxDialog
         wxCheckBox *m_ckUseTCIPTT;
         wxTextCtrl *m_tcTciHostname;
         wxTextCtrl *m_tcTciPort;
-        wxCheckBox *m_ckUseTCIAudio;
 
         /* Serial Settings */
 
@@ -106,7 +105,6 @@ protected:
 
         void PTTUseHamLibClicked(wxCommandEvent& event);
         void PTTUseTciClicked(wxCommandEvent& event);
-        void PTTUseTciAudioClicked(wxCommandEvent& event);
         void PTTUseSerialClicked(wxCommandEvent& event);
         
 #if defined(WIN32)

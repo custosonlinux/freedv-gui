@@ -175,7 +175,7 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
 
     wxStaticBox* tciBox = new wxStaticBox(panel, wxID_ANY, _("TCI Protocol Settings"));
     wxStaticBoxSizer* staticBoxSizerTci = new wxStaticBoxSizer(tciBox, wxHORIZONTAL);
-    wxGridSizer* gridSizerTci = new wxGridSizer(4, 2, 0, 0);
+    wxGridSizer* gridSizerTci = new wxGridSizer(3, 2, 0, 0);
     staticBoxSizerTci->Add(gridSizerTci, 1, wxEXPAND|wxALIGN_LEFT, 5);
 
     m_ckUseTCIPTT = new wxCheckBox(tciBox, wxID_ANY, _("Enable CAT/PTT control via TCI"), wxDefaultPosition, wxSize(-1, -1), 0);
@@ -192,11 +192,6 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
                       0, wxALIGN_CENTER_VERTICAL | wxALIGN_RIGHT, 20);
     m_tcTciPort = new wxTextCtrl(tciBox, wxID_ANY, wxT("50001"), wxDefaultPosition, wxSize(250, -1));
     gridSizerTci->Add(m_tcTciPort, 0, wxEXPAND, 0);
-
-    m_ckUseTCIAudio = new wxCheckBox(tciBox, wxID_ANY, _("Use TCI for audio streaming (requires TCI-capable SDR software)"), wxDefaultPosition, wxSize(-1, -1), 0);
-    m_ckUseTCIAudio->SetValue(false);
-    gridSizerTci->Add(m_ckUseTCIAudio, 0, wxALIGN_CENTER_VERTICAL, 0);
-    gridSizerTci->Add(new wxStaticText(tciBox, -1, wxT("")), 0, wxEXPAND);
 
     mainSizer->Add(staticBoxSizerTci, 0, wxEXPAND, 5);
 
@@ -345,7 +340,6 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
     this->Connect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
     m_ckUseTCIPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
-    m_ckUseTCIAudio->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciAudioClicked), NULL, this);
     m_ckUseSerialPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     
 #if defined(WIN32)
@@ -372,7 +366,6 @@ ComPortsDlg::~ComPortsDlg()
     this->Disconnect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
     m_ckUseTCIPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
-    m_ckUseTCIAudio->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciAudioClicked), NULL, this);
     m_ckUseSerialPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     m_ckUsePTTInput->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialInputClicked), NULL, this);
     m_cbRigName->Disconnect(wxEVT_COMBOBOX, wxCommandEventHandler(ComPortsDlg::HamlibRigNameChanged), NULL, this);
@@ -653,7 +646,6 @@ void ComPortsDlg::ExchangeData(int inout)
         m_ckUseTCIPTT->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCI);
         m_tcTciHostname->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.tciHostname);
         m_tcTciPort->SetValue(wxString::Format(wxT("%u"), wxGetApp().appConfiguration.rigControlConfiguration.tciPort.get()));
-        m_ckUseTCIAudio->SetValue(wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio);
 
         /* Serial PTT */
 
@@ -723,7 +715,6 @@ void ComPortsDlg::ExchangeData(int inout)
         long tciPort = 50001;
         m_tcTciPort->GetValue().ToLong(&tciPort);
         wxGetApp().appConfiguration.rigControlConfiguration.tciPort = (unsigned int)tciPort;
-        wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio = m_ckUseTCIAudio->GetValue();
 
         /* Serial settings */
 
@@ -777,12 +768,6 @@ void ComPortsDlg::PTTUseTciClicked(wxCommandEvent&)
 
     updateControlState();
 }
-
-void ComPortsDlg::PTTUseTciAudioClicked(wxCommandEvent&)
-{
-    updateControlState();
-}
-
 
 /* Attempt to toggle PTT for 1 second */
 
@@ -1121,10 +1106,8 @@ void ComPortsDlg::updateControlState()
     m_cbPttMethod->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
     m_cbPttSerialPort->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
 
-    bool anyTciEnabled = m_ckUseTCIPTT->GetValue() || m_ckUseTCIAudio->GetValue();
-    m_tcTciHostname->Enable(!isTesting_ && anyTciEnabled);
-    m_tcTciPort->Enable(!isTesting_ && anyTciEnabled);
-    m_ckUseTCIAudio->Enable(!isTesting_);
+    m_tcTciHostname->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
+    m_tcTciPort->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
 
     m_cbCtlDevicePath->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());
     m_rbUseDTR->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());
