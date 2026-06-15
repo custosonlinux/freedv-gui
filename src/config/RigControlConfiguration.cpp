@@ -34,7 +34,12 @@ RigControlConfiguration::RigControlConfiguration()
     , hamlibPttSerialPort("/Hamlib/PttSerialPort", "")
     , hamlibForceRTSOn("/Hamlib/ForceRTSOn", false)
     , hamlibForceDTROn("/Hamlib/ForceDTROn", false)
-        
+
+    , useTCI("/TCI/Enable", false)
+    , tciHostname("/TCI/Hostname", "localhost")
+    , tciPort("/TCI/Port", 50001)
+    , useTCIAudio("/TCI/UseAudio", false)
+
     , useSerialPTT("/Rig/UseSerialPTT", false)
     , serialPTTPort("/Rig/Port", "")
     , serialPTTUseRTS("/Rig/UseRTS", true)
@@ -78,6 +83,11 @@ void RigControlConfiguration::load(wxConfigBase* config)
     load_(config, hamlibForceRTSOn);
     load_(config, hamlibForceDTROn);
 
+    load_(config, useTCI);
+    load_(config, tciHostname);
+    load_(config, tciPort);
+    load_(config, useTCIAudio);
+
     load_(config, useSerialPTT);
     load_(config, serialPTTPort);
     load_(config, serialPTTUseRTS);
@@ -113,6 +123,11 @@ void RigControlConfiguration::save(wxConfigBase* config)
     save_(config, hamlibPttSerialPort);
     save_(config, hamlibForceRTSOn);
     save_(config, hamlibForceDTROn);
+
+    save_(config, useTCI);
+    save_(config, tciHostname);
+    save_(config, tciPort);
+    save_(config, useTCIAudio);
 
     save_(config, useSerialPTT);
     save_(config, serialPTTPort);

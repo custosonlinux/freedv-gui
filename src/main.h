@@ -308,6 +308,7 @@ class MainFrame : public TopFrame
         bool                    m_RxRunning;
         
         bool                    OpenHamlibRig();
+        bool                    OpenTciRig();
 #if defined(WIN32)
         void                    OpenOmniRig();
 #endif // defined(WIN32)

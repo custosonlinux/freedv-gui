@@ -43,6 +43,8 @@
 #include "os/os_interface.h"
 #include "freedv_interface.h"
 #include "audio/AudioEngineFactory.h"
+#include "audio/TciAudioDevice.h"
+#include "rig_control/TciRigController.h"
 #include "codec2_fdmdv.h"
 #include "pipeline/TxRxThread.h"
 #include "reporting/pskreporter.h"
@@ -2650,12 +2652,16 @@ void MainFrame::performFreeDVOn_()
                     });
                 }
 
-                // attempt to start PTT ......            
-                if (wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT)
+                // attempt to start PTT ......
+                if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI)
+                {
+                    OpenTciRig();
+                }
+                else if (wxGetApp().appConfiguration.rigControlConfiguration.hamlibUseForPTT)
                 {
                     OpenHamlibRig();
                 }
-                else if (wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT) 
+                else if (wxGetApp().appConfiguration.rigControlConfiguration.useSerialPTT)
                 {
                     OpenSerialPort();
                 }
@@ -2663,11 +2669,11 @@ void MainFrame::performFreeDVOn_()
                 {
                     wxGetApp().rigPttController = nullptr;
                 }
-                
+
     #if defined(WIN32)
                 if (wxGetApp().appConfiguration.rigControlConfiguration.useOmniRig)
                 {
-                    // OmniRig can be anbled along with serial port PTT.
+                    // OmniRig can be enabled along with serial port PTT.
                     // The logic below will ensure we don't overwrite the serial PTT
                     // handler.
                     OpenOmniRig();
@@ -3361,13 +3367,52 @@ void MainFrame::startRxStream()
             }
             else
             {
+                // If TCI audio is enabled, replace the radio I/O sound devices
+                // with the TciAudioDevice, which streams audio over WebSocket.
+                bool useTciAudio = wxGetApp().appConfiguration.rigControlConfiguration.useTCI &&
+                                   wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio;
+                if (useTciAudio)
+                {
+                    auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
+                    if (tciRigController)
+                    {
+                        // Release the existing radio I/O sound devices
+                        if (rxInSoundDevice)
+                        {
+                            rxInSoundDevice.reset();
+                        }
+                        if (txOutSoundDevice)
+                        {
+                            txOutSoundDevice->stop();
+                            txOutSoundDevice.reset();
+                        }
+
+                        auto wsClient = tciRigController->getWebSocketClient();
+                        int trx = tciRigController->getTrx();
+                        auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                        tciDevice->initialize();
+                        tciDevice->setDescription("TCI Radio");
+                        tciDevice->setOnAudioData(&OnRxInAudioData_, g_rxUserdata);
+                        tciDevice->setOnTxAudioData(&OnTxOutAudioData_, g_rxUserdata);
+
+                        rxInSoundDevice = tciDevice;
+                        txOutSoundDevice = tciDevice;
+
+                        wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = tciDevice->getSampleRate();
+                        wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = tciDevice->getSampleRate();
+                    }
+                }
+
                 // Re-save sample rates in case they were somehow invalid before
                 // device creation.
-                wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = rxInSoundDevice->getSampleRate();
-                wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate = rxOutSoundDevice->getSampleRate();
-
-                wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate = txInSoundDevice->getSampleRate();
-                wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = txOutSoundDevice->getSampleRate();
+                if (rxInSoundDevice)
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = rxInSoundDevice->getSampleRate();
+                if (rxOutSoundDevice)
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard2Out.sampleRate = rxOutSoundDevice->getSampleRate();
+                if (txInSoundDevice)
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard2In.sampleRate = txInSoundDevice->getSampleRate();
+                if (txOutSoundDevice)
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = txOutSoundDevice->getSampleRate();
             }
         }
 

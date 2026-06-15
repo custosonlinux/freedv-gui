@@ -25,6 +25,8 @@
 #include "rig_control/omnirig/OmniRigController.h"
 #endif // defined(WIN32)
 
+#include "rig_control/TciRigController.h"
+
 #include "codec2_fdmdv.h" // for FDMDV_FCENTRE
 
 extern int g_mode;
@@ -686,6 +688,49 @@ void MainFrame::OpenOmniRig()
     wxGetApp().rigFrequencyController->connect();
 }
 #endif // defined(WIN32)
+
+//-------------------------------------------------------------------------
+// OpenTciRig()
+//-------------------------------------------------------------------------
+bool MainFrame::OpenTciRig()
+{
+    if (wxGetApp().appConfiguration.rigControlConfiguration.useTCI != true)
+        return false;
+
+    wxString hostname = wxGetApp().appConfiguration.rigControlConfiguration.tciHostname;
+    unsigned int port = wxGetApp().appConfiguration.rigControlConfiguration.tciPort;
+
+    auto tmp = std::make_shared<TciRigController>(
+        std::string(hostname.ToUTF8()),
+        port);
+
+    firstFreqUpdateOnConnect_ = false;
+    wxGetApp().rigFrequencyController = tmp;
+    wxGetApp().rigPttController = tmp;
+
+    wxGetApp().rigFrequencyController->onRigError += [this](IRigController*, std::string const& err)
+    {
+        std::string fullErr = "Couldn't connect to Radio with TCI: " + err;
+        CallAfter([&, fullErr]() {
+            wxMessageBox(fullErr, wxT("Error"), wxOK | wxICON_ERROR, this);
+        });
+    };
+
+    wxGetApp().rigFrequencyController->onRigConnected += [&](IRigController* ptr) {
+        onRadioConnected_(ptr);
+    };
+
+    wxGetApp().rigFrequencyController->onRigDisconnected += [&](IRigController* ptr) {
+        onRadioDisconnected_(ptr);
+    };
+
+    wxGetApp().rigFrequencyController->onFreqModeChange += [&](IRigFrequencyController* ptr, uint64_t freq, IRigFrequencyController::Mode mode) {
+        onFrequencyModeChange_(ptr, freq, mode);
+    };
+
+    wxGetApp().rigFrequencyController->connect();
+    return true;
+}
 
 //-------------------------------------------------------------------------
 // OnCloseFrame()

@@ -3,9 +3,13 @@ add_library(fdv_rig_control STATIC
     SerialPortRigController.cpp
     SerialPortInRigController.cpp
     SerialPortOutRigController.cpp
+    TciProtocol.cpp
+    TciWebSocketClient.cpp
+    TciRigController.cpp
+    ../audio/TciAudioDevice.cpp
 )
 
-target_include_directories(fdv_rig_control PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_BINARY_DIR}/..)
+target_include_directories(fdv_rig_control PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_CURRENT_BINARY_DIR}/.. ${CMAKE_CURRENT_SOURCE_DIR}/../audio)
 
 if(HAMLIB_ADD_DEPENDENCY)
 add_dependencies(fdv_rig_control hamlib)
@@ -17,5 +21,5 @@ add_subdirectory(omnirig)
 target_link_libraries(fdv_rig_control PUBLIC fdv_rig_control_omnirig)
 endif(WIN32)
 
-target_link_libraries(fdv_rig_control PUBLIC fdv_util)
+target_link_libraries(fdv_rig_control PUBLIC fdv_util fdv_audio)
 target_compile_options(fdv_rig_control PRIVATE ${WARNINGS_AS_ERRORS_FLAGS})
