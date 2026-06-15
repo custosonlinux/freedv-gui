@@ -3369,38 +3369,51 @@ void MainFrame::startRxStream()
             {
                 // If TCI audio is enabled, replace the radio I/O sound devices
                 // with the TciAudioDevice, which streams audio over WebSocket.
-                bool useTciAudio = wxGetApp().appConfiguration.rigControlConfiguration.useTCI &&
-                                   wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio;
+                // Works with or without TCI CAT: if CAT is active, shares that
+                // WebSocket connection; otherwise opens a standalone connection.
+                bool useTciAudio = wxGetApp().appConfiguration.rigControlConfiguration.useTCIAudio;
                 if (useTciAudio)
                 {
+                    std::shared_ptr<tci::TciWebSocketClient> wsClient;
+                    int trx = 0;
+
                     auto tciRigController = std::dynamic_pointer_cast<TciRigController>(wxGetApp().rigFrequencyController);
                     if (tciRigController)
                     {
-                        // Release the existing radio I/O sound devices
-                        if (rxInSoundDevice)
-                        {
-                            rxInSoundDevice.reset();
-                        }
-                        if (txOutSoundDevice)
-                        {
-                            txOutSoundDevice->stop();
-                            txOutSoundDevice.reset();
-                        }
-
-                        auto wsClient = tciRigController->getWebSocketClient();
-                        int trx = tciRigController->getTrx();
-                        auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
-                        tciDevice->initialize();
-                        tciDevice->setDescription("TCI Radio");
-                        tciDevice->setOnAudioData(&OnRxInAudioData_, g_rxUserdata);
-                        tciDevice->setOnTxAudioData(&OnTxOutAudioData_, g_rxUserdata);
-
-                        rxInSoundDevice = tciDevice;
-                        txOutSoundDevice = tciDevice;
-
-                        wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = tciDevice->getSampleRate();
-                        wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = tciDevice->getSampleRate();
+                        wsClient = tciRigController->getWebSocketClient();
+                        trx = tciRigController->getTrx();
                     }
+                    else
+                    {
+                        // Audio-only: open a standalone WebSocket to the TCI server
+                        wxString hostname = wxGetApp().appConfiguration.rigControlConfiguration.tciHostname;
+                        unsigned int port = wxGetApp().appConfiguration.rigControlConfiguration.tciPort;
+                        wsClient = std::make_shared<tci::TciWebSocketClient>();
+                        wsClient->connect(std::string(hostname.ToUTF8()), (int)port);
+                    }
+
+                    // Release the existing radio I/O sound devices
+                    if (rxInSoundDevice)
+                    {
+                        rxInSoundDevice.reset();
+                    }
+                    if (txOutSoundDevice)
+                    {
+                        txOutSoundDevice->stop();
+                        txOutSoundDevice.reset();
+                    }
+
+                    auto tciDevice = std::make_shared<TciAudioDevice>(wsClient, trx);
+                    tciDevice->initialize();
+                    tciDevice->setDescription("TCI Radio");
+                    tciDevice->setOnAudioData(&OnRxInAudioData_, g_rxUserdata);
+                    tciDevice->setOnTxAudioData(&OnTxOutAudioData_, g_rxUserdata);
+
+                    rxInSoundDevice = tciDevice;
+                    txOutSoundDevice = tciDevice;
+
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard1In.sampleRate = tciDevice->getSampleRate();
+                    wxGetApp().appConfiguration.audioConfiguration.soundCard1Out.sampleRate = tciDevice->getSampleRate();
                 }
 
                 // Re-save sample rates in case they were somehow invalid before

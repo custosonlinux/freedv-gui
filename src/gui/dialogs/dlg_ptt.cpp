@@ -345,6 +345,7 @@ ComPortsDlg::ComPortsDlg(wxWindow* parent, wxWindowID id, const wxString& title,
     this->Connect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
     m_ckUseTCIPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
+    m_ckUseTCIAudio->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciAudioClicked), NULL, this);
     m_ckUseSerialPTT->Connect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     
 #if defined(WIN32)
@@ -371,6 +372,7 @@ ComPortsDlg::~ComPortsDlg()
     this->Disconnect(wxEVT_INIT_DIALOG, wxInitDialogEventHandler(ComPortsDlg::OnInitDialog), NULL, this);
     m_ckUseHamlibPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseHamLibClicked), NULL, this);
     m_ckUseTCIPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciClicked), NULL, this);
+    m_ckUseTCIAudio->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseTciAudioClicked), NULL, this);
     m_ckUseSerialPTT->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialClicked), NULL, this);
     m_ckUsePTTInput->Disconnect(wxEVT_COMMAND_CHECKBOX_CLICKED, wxCommandEventHandler(ComPortsDlg::PTTUseSerialInputClicked), NULL, this);
     m_cbRigName->Disconnect(wxEVT_COMBOBOX, wxCommandEventHandler(ComPortsDlg::HamlibRigNameChanged), NULL, this);
@@ -776,6 +778,11 @@ void ComPortsDlg::PTTUseTciClicked(wxCommandEvent&)
     updateControlState();
 }
 
+void ComPortsDlg::PTTUseTciAudioClicked(wxCommandEvent&)
+{
+    updateControlState();
+}
+
 
 /* Attempt to toggle PTT for 1 second */
 
@@ -1114,9 +1121,10 @@ void ComPortsDlg::updateControlState()
     m_cbPttMethod->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
     m_cbPttSerialPort->Enable(!isTesting_ && m_ckUseHamlibPTT->GetValue());
 
-    m_tcTciHostname->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
-    m_tcTciPort->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
-    m_ckUseTCIAudio->Enable(!isTesting_ && m_ckUseTCIPTT->GetValue());
+    bool anyTciEnabled = m_ckUseTCIPTT->GetValue() || m_ckUseTCIAudio->GetValue();
+    m_tcTciHostname->Enable(!isTesting_ && anyTciEnabled);
+    m_tcTciPort->Enable(!isTesting_ && anyTciEnabled);
+    m_ckUseTCIAudio->Enable(!isTesting_);
 
     m_cbCtlDevicePath->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());
     m_rbUseDTR->Enable(!isTesting_ && m_ckUseSerialPTT->GetValue());

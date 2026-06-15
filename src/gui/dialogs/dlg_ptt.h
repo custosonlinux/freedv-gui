@@ -106,6 +106,7 @@ protected:
 
         void PTTUseHamLibClicked(wxCommandEvent& event);
         void PTTUseTciClicked(wxCommandEvent& event);
+        void PTTUseTciAudioClicked(wxCommandEvent& event);
         void PTTUseSerialClicked(wxCommandEvent& event);
         
 #if defined(WIN32)
